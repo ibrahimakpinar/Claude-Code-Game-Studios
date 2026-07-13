@@ -15,6 +15,7 @@
 //   design/gdd/player-movement-mechanics.md §Movement State Enum
 // Story: production/epics/player-movement/story-001-pawn-component-skeleton.md
 // Story: production/epics/player-movement/story-003-state-machine-tick-body.md
+// Story: production/epics/player-movement/story-005-input-buffer.md
 
 #pragma once
 
@@ -297,6 +298,19 @@ public:
      *  composition invariant and lateral_world_position_settled integration tests.
      *  Story 004 composition tests. */
     friend class FPMLateralInterpolationCompositionTest;
+
+    /** Grants FPMInputBufferTest direct access to private fields and helpers
+     *  required for Story 005 unit tests: has_queued_input, queued_input_direction,
+     *  movement_state, current_lane, target_lane, slip_complete_count, RSMSubsystem,
+     *  CompleteTween, HandleSlipTransition, DiscardBuffer,
+     *  BufferDropAudioSting_TestOnlyCallCount.
+     *  Story 005 Implementation Notes. */
+    friend class FPMInputBufferTest;
+
+    /** Grants FPMLeanTest access to ComputeLean, DirectionSign, and private state
+     *  (LeanCurve, bCurveFallbackActive) for AC-26/27/30 + staggered-offset unit tests.
+     *  Story 006. */
+    friend class FPMLeanTest;
 #endif // WITH_DEV_AUTOMATION_TESTS
 
 private:
@@ -342,6 +356,11 @@ private:
     /** Test-only: increments once per HandleStateChanged invocation.
      *  Used by TC4 post-EndPlay broadcast verification. Story 001a. */
     mutable int32 HandleStateChanged_TestOnlyCallCount = 0;
+
+    /** Test-only: increments once per PlayBufferDropAudioSting invocation.
+     *  Read via FPMInputBufferTest friend to verify synchronous dispatch (AC-25).
+     *  Story 005. Non-const write from PlayBufferDropAudioSting — no mutable needed. */
+    int32 BufferDropAudioSting_TestOnlyCallCount = 0;
 #endif // WITH_DEV_AUTOMATION_TESTS
 
     // -----------------------------------------------------------------------
@@ -435,6 +454,21 @@ private:
      *  and Dir for direction-specific mesh deformation (e.g., wall-bounce sign). */
     void TriggerEdgeAbsorb(EPlayerLane FromLane, ESlipDirection Dir);
 
+    /** Rule 11 buffer discard helper — sets has_queued_input = false.
+     *  Called by Story 008's HandleStateChanged terminal-state handlers (DEAD /
+     *  COMPLETE / ABORTED / COUNTDOWN) when a non-RUNNING state is entered.
+     *  Story 009's HandlePausedChanged does NOT call this — pause preserves the
+     *  buffer per AC-13.
+     *  Published in Story 005; invocation by Story 008. */
+    void DiscardBuffer();
+
+    /** Presentation dispatch stub for buffer-drop audio feedback (Rule 3 drop path).
+     *  Fires synchronously within the same HandleSlipTransition event call (AC-25).
+     *  The audio system owns the actual cue; this method fires the dispatch.
+     *  Current stub body: UE_LOG at Verbose.  Audio routing is downstream.
+     *  Story 005. */
+    void PlayBufferDropAudioSting();
+
     // -----------------------------------------------------------------------
     // Story 004 — F-3 lateral interpolation
     // -----------------------------------------------------------------------
@@ -458,4 +492,36 @@ private:
      *  -X face for ESlipDirection::Left slip (TargetLane < current_lane ordinal).
      *  Increment commitment_tell_fire_count and enforce cadence cap. */
     void TriggerCommitmentTell(EPlayerLane TargetLane);
+
+    // -----------------------------------------------------------------------
+    // Story 006 — F-5 body/head/arm lean (LeanCurve + staggered offsets)
+    // -----------------------------------------------------------------------
+
+    /** F-5 lean tuning knobs (mechanics §7).
+     *  MAX_LEAN_ANGLE_DEG: peak lean magnitude before ±1.2× clamp.  Safe range [8°, 12°].
+     *  HEAD_LAG_PROGRESS:  head samples LeanCurve at (TP - lag).  Safe range [0.08, 0.12].
+     *  ARM_LEAD_PROGRESS:  arm samples LeanCurve at (TP + lead). Safe range [0.03, 0.08].
+     *  ADR-0009 SD5 + SD6; TR-PM-008; GDD design/gdd/player-movement-mechanics.md §7. */
+    static constexpr float MAX_LEAN_ANGLE_DEG = 10.0f;
+    static constexpr float HEAD_LAG_PROGRESS  = 0.10f;
+    static constexpr float ARM_LEAD_PROGRESS  = 0.05f;
+
+    /** F-5 body/head/arm lean computation.
+     *  Reads LeanCurve at three staggered progress offsets: TP (body), TP-HEAD_LAG (head),
+     *  TP+ARM_LEAD (arm). Each component multiplied by MAX_LEAN_ANGLE_DEG * DirectionSign,
+     *  then clamped to ±(MAX_LEAN_ANGLE_DEG * 1.2).
+     *  Fallback: LeanCurve null OR bCurveFallbackActive == true → all three outputs = 0.
+     *  Pure math — reads LeanCurve, bCurveFallbackActive; writes nothing to *this*.
+     *  Outputs via reference parameters. ADR-0009 SD5 + SD6. TR-PM-008, TR-PM-029, TR-PM-033.
+     *  GDD: design/gdd/player-movement-mechanics.md §4 F-5. Story 006. */
+    void ComputeLean(float TweenProgress,
+                     EPlayerLane FromLane,
+                     EPlayerLane ToLane,
+                     float& OutBodyLean,
+                     float& OutHeadLean,
+                     float& OutArmLean) const;
+
+    /** Direction sign for lean — +1 if slipping right (ToLane index > FromLane index),
+     *  else -1. Pure math on lane ordinals. Story 006. */
+    static float DirectionSign(EPlayerLane FromLane, EPlayerLane ToLane);
 };

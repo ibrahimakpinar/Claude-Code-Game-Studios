@@ -13,6 +13,12 @@
 //   IsSlipValidFromLane (F-4), CompleteTween, and stubs for
 //   FlushBufferedInput (Story 005), TriggerEdgeAbsorb (Story 007),
 //   TriggerCommitmentTell (Story 010).
+// Story 005 scope: HandleSlipTransition SLIPPING branch (Rule 3 buffer-drop +
+//   F-4 pre-validation vs target_lane + edge-absorb hook + buffer set),
+//   FlushBufferedInput implementation, DiscardBuffer, PlayBufferDropAudioSting.
+//   IHapticDispatch seam interface declaration (ADR-0002 INT-002-amended).
+// Story 006 scope: F-5 body/head/arm lean — ComputeLean, DirectionSign, tick-site
+//   SetRelativeRotation write, SETTLED lean-zero branch. TR-PM-008/029/033.
 // RSM handler bodies by Stories 008–009.
 // Watchdog buffer advance by Story 013.
 
@@ -23,6 +29,7 @@
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 #include "Misc/App.h"  // FApp::GetDeltaTime() — F-PROLOGUE (Story 002)
+#include "Seam/IHapticDispatch.h"             // ADR-0002 INT-002-amended haptic bridge — Story 005
 
 DEFINE_LOG_CATEGORY(LogPlayerMovement);
 
@@ -224,7 +231,36 @@ void UPlayerLaneMovementComponent::TickComponent(
             CachedMeshComponent->SetRelativeLocation(FVector(rel_x, 0.0f, 0.0f));
             lateral_world_position = GetOwner()->GetActorLocation().X + rel_x;
         }
-        // F-5 site (Story 006): CachedMeshComponent->SetRelativeRotation(F5Lean(tween_progress));
+        // F-5: body/head/arm lean. Body drives mesh rotation via SetRelativeRotation;
+        // head/arm exposed as public properties for skeletal-animation Blueprint consumption.
+        // IG-6: SetActorRotation on pawn root is FORBIDDEN — rotate the mesh component only.
+        // TR-PM-008, TR-PM-029, TR-PM-033. Story 006.
+        if (IsValid(CachedMeshComponent))
+        {
+            float body_lean_deg = 0.0f;
+            float head_lean_deg = 0.0f;
+            float arm_lean_deg  = 0.0f;
+            ComputeLean(tween_progress, current_lane, target_lane,
+                        body_lean_deg, head_lean_deg, arm_lean_deg);
+
+            // Story 007 F-6 co-write will add edge_absorb contribution here before the
+            // final SetRelativeRotation call. For Story 006, apply body_lean directly.
+            //
+            // AXIS: FRotator(Pitch, Yaw, Roll). Lateral lean during a slip is ROLL
+            // (rotation around forward X axis, tilting the character left/right).
+            // NOT Pitch (nod forward/back). Standard UE convention: forward=+X,
+            // right=+Y, up=+Z; SlipstormPlayerPawn applies no mesh-orientation
+            // override so this convention is authoritative. Corrected during
+            // Story 006 /code-review — spec text (story-006 §Implementation Notes,
+            // ADR-0009 IG-6) has `FRotator(lean_angle, 0, 0)` which is Pitch;
+            // corrected here to Roll. Spec + ADR amendments tracked in Story 006
+            // Completion Notes for follow-up alignment pass.
+            CachedMeshComponent->SetRelativeRotation(FRotator(0.0f, 0.0f, body_lean_deg));
+
+            lean_angle      = body_lean_deg;
+            head_lean_angle = head_lean_deg;
+            arm_lean_angle  = arm_lean_deg;
+        }
         // F-6 site (Story 007): if (edge_absorb_active) AdvanceEdgeAbsorb(effective_dt);
 
         if (tween_progress >= 1.0f)
@@ -237,6 +273,15 @@ void UPlayerLaneMovementComponent::TickComponent(
         // AC: lateral_world_position returns LaneWorldX(current_lane) when SETTLED.
         // Keeps the property fresh for Camera and Pull-Wave targeting consumers.
         lateral_world_position = LaneWorldX(current_lane);
+
+        // AC-26: SETTLED (with F-6 inactive) → F-5 outputs zero.
+        // Story 007's F-6 tail may leave residual lean during SETTLED entry — that
+        // path co-writes lean_angle. This branch only zeroes F-5's contribution.
+        // Story 007 will refactor if needed. For now, unconditional zero is correct
+        // because F-6 isn't implemented yet.
+        lean_angle      = 0.0f;
+        head_lean_angle = 0.0f;
+        arm_lean_angle  = 0.0f;
     }
 }
 
@@ -296,7 +341,39 @@ void UPlayerLaneMovementComponent::HandleSlipTransition(ESlipDirection Dir)
 
     if (movement_state == ERunSlipState::SLIPPING)
     {
-        // Buffered-input path lands in Story 005.
+        // Story 005: Buffered-input path (Rule 3 + F-4 pre-validation).
+        // GDD: design/gdd/player-movement-mechanics.md §3 Rules 3/4/11, §4 F-4.
+        // TR-PM-012: single-slot input buffer with F-4 pre-validation.
+
+        if (has_queued_input)
+        {
+            // Rule 3 drop: buffer is full — leave the existing queued slot UNCHANGED.
+            // Fire haptic dispatch (AC-25: synchronous within this event call).
+            if (IHapticDispatch::IsSystemHapticsEnabled())
+            {
+                IHapticDispatch::Fire(EHapticEvent::BufferDrop);
+            }
+            // Presentation dispatch: audio sting fires regardless of haptic gate (AC-25).
+            PlayBufferDropAudioSting();
+            return;
+        }
+
+        // Buffer is empty: F-4 pre-validation against target_lane (projected end-state).
+        // Using target_lane (not current_lane) — this is the BUFFERED path, where the
+        // tween is still in flight and the player's next committed source will be target_lane.
+        EPlayerLane ProjectedTarget = target_lane; // initialise to satisfy the compiler
+        if (!IsSlipValidFromLane(target_lane, Dir, ProjectedTarget))
+        {
+            // F-4 rejected the buffered input — off-track from projected target_lane.
+            // Fire edge-absorb hook (Story 007 stub) and discard without buffering.
+            // No haptic BufferDrop — this is an edge no-op, not a buffer-full drop.
+            TriggerEdgeAbsorb(target_lane, Dir);
+            return;
+        }
+
+        // Valid buffered input — commit to the single-slot buffer.
+        has_queued_input        = true;
+        queued_input_direction  = Dir;
         return;
     }
 
@@ -551,9 +628,41 @@ void UPlayerLaneMovementComponent::CompleteTween()
 
 void UPlayerLaneMovementComponent::FlushBufferedInput()
 {
-    // TODO(Story 005): implement single-slot buffer flush: if has_queued_input,
-    // pop direction, clear has_queued_input, call HandleSlipTransition(dir).
-    // Invoked from CompleteTween — same tick, no idle frame (AC-34b).
+    // Story 005 (AC-04, AC-34b): invoked from the tail of CompleteTween. Same tick,
+    // no idle frame — the buffered slip commits its own SETTLED→SLIPPING transition
+    // synchronously as part of the completing tween's frame.
+    if (!has_queued_input)
+    {
+        return;
+    }
+    // Snapshot direction, clear the flag BEFORE re-entering HandleSlipTransition.
+    // At this point CompleteTween has already run: movement_state == SETTLED, so the
+    // re-entry hits the SETTLED path (F-4 validate → collision commit → SLIPPING).
+    const ESlipDirection Dir = queued_input_direction;
+    has_queued_input          = false;
+    HandleSlipTransition(Dir);
+}
+
+void UPlayerLaneMovementComponent::DiscardBuffer()
+{
+    // Story 005 / Rule 11: buffer is discarded on ANY non-RUNNING RSM state entry.
+    // Story 008's HandleStateChanged terminal-state branches invoke this helper.
+    // Story 009's HandlePausedChanged does NOT call this — pause PRESERVES the
+    // buffer per AC-13.
+    has_queued_input = false;
+}
+
+void UPlayerLaneMovementComponent::PlayBufferDropAudioSting()
+{
+    // Story 005 presentation dispatch — stub. The audio system owns the actual cue;
+    // this method just fires the dispatch. Wiring to the audio subsystem is
+    // downstream (audio-designer / audio-programmer scope, out of PM epic).
+    UE_LOG(LogPlayerMovement, Verbose, TEXT("PlayBufferDropAudioSting fired"));
+
+#if WITH_DEV_AUTOMATION_TESTS
+    // Test hook — AC-25 synchronous-dispatch verification.
+    ++BufferDropAudioSting_TestOnlyCallCount;
+#endif
 }
 
 void UPlayerLaneMovementComponent::TriggerEdgeAbsorb(EPlayerLane FromLane, ESlipDirection Dir)
@@ -621,4 +730,70 @@ float UPlayerLaneMovementComponent::F3RelativeOffset(float TweenProgress) const
     }
 
     return FMath::Lerp(delta, 0.0f, curve_t);
+}
+
+// ---------------------------------------------------------------------------
+// Story 006 — F-5 lean: DirectionSign + ComputeLean
+//
+// DirectionSign:
+//   Returns +1.0f when ToLane ordinal > FromLane ordinal (rightward slip),
+//   returns -1.0f otherwise (leftward slip, same lane [invalid at runtime]).
+//   Pure math on lane ordinals.
+//   GDD: design/gdd/player-movement-mechanics.md §4 F-5. TR-PM-008.
+//
+// ComputeLean:
+//   Samples LeanCurve at three staggered TweenProgress offsets:
+//     body: TweenProgress
+//     head: max(0.0, TweenProgress - HEAD_LAG_PROGRESS)  [lags body]
+//     arm:  min(1.0, TweenProgress + ARM_LEAD_PROGRESS)  [leads body]
+//   Each scaled by (MAX_LEAN_ANGLE_DEG * DirectionSign) and clamped to
+//   ±(MAX_LEAN_ANGLE_DEG * 1.2f) per TR-PM-033.
+//   Fallback (SD6): LeanCurve null OR bCurveFallbackActive → zero lean.
+//   ADR-0009 SD5 + SD6 + IG-6. TR-PM-008, TR-PM-029, TR-PM-033. Story 006.
+// ---------------------------------------------------------------------------
+
+float UPlayerLaneMovementComponent::DirectionSign(EPlayerLane FromLane, EPlayerLane ToLane)
+{
+    const int32 delta = static_cast<int32>(ToLane) - static_cast<int32>(FromLane);
+    return (delta > 0) ? 1.0f : -1.0f;
+    // Note: delta == 0 (same lane) is not a valid F-5 input — F-5 only runs during
+    // SLIPPING, and SLIPPING requires target != current per Story 003 Rule 2.
+    // Convention: return -1 for zero-delta (never observed at runtime).
+}
+
+void UPlayerLaneMovementComponent::ComputeLean(
+    float TweenProgress,
+    EPlayerLane FromLane,
+    EPlayerLane ToLane,
+    float& OutBodyLean,
+    float& OutHeadLean,
+    float& OutArmLean) const
+{
+    // Fallback (SD6): LeanCurve null OR runtime fallback flag set → zero lean.
+    if (!LeanCurve || bCurveFallbackActive)
+    {
+        OutBodyLean = 0.0f;
+        OutHeadLean = 0.0f;
+        OutArmLean  = 0.0f;
+        return;
+    }
+
+    const float sign      = DirectionSign(FromLane, ToLane);
+    const float max_clamp = MAX_LEAN_ANGLE_DEG * 1.2f;
+
+    // Body: sampled at TweenProgress clamped to [0, 1]. Symmetric with the
+    // head Max(0, ...) and arm Min(1, ...) clamps below. F-2 accumulator can
+    // exceed 1.0 on a hitch (Story 002 TC3 evidence: reaches 1.667 on 5-tick
+    // hitch); without this clamp the body curve read would extrapolate, whereas
+    // head and arm inputs would still be clamped. Story 004's F-3 solved the
+    // same asymmetry the same way.
+    const float body_t = LeanCurve->GetFloatValue(FMath::Clamp(TweenProgress, 0.0f, 1.0f));
+    // Head: lags body by HEAD_LAG_PROGRESS; clamp input to [0, ∞) via Max.
+    const float head_t = LeanCurve->GetFloatValue(FMath::Max(0.0f, TweenProgress - HEAD_LAG_PROGRESS));
+    // Arm: leads body by ARM_LEAD_PROGRESS; clamp input to (-∞, 1.0] via Min.
+    const float arm_t  = LeanCurve->GetFloatValue(FMath::Min(1.0f, TweenProgress + ARM_LEAD_PROGRESS));
+
+    OutBodyLean = FMath::Clamp(body_t * MAX_LEAN_ANGLE_DEG * sign, -max_clamp, max_clamp);
+    OutHeadLean = FMath::Clamp(head_t * MAX_LEAN_ANGLE_DEG * sign, -max_clamp, max_clamp);
+    OutArmLean  = FMath::Clamp(arm_t  * MAX_LEAN_ANGLE_DEG * sign, -max_clamp, max_clamp);
 }
