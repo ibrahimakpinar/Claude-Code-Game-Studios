@@ -16,6 +16,7 @@
 // Story: production/epics/player-movement/story-001-pawn-component-skeleton.md
 // Story: production/epics/player-movement/story-003-state-machine-tick-body.md
 // Story: production/epics/player-movement/story-005-input-buffer.md
+// Story: production/epics/player-movement/story-007-f6-edge-absorb.md
 
 #pragma once
 
@@ -311,6 +312,19 @@ public:
      *  (LeanCurve, bCurveFallbackActive) for AC-26/27/30 + staggered-offset unit tests.
      *  Story 006. */
     friend class FPMLeanTest;
+
+    /** Grants FPMEdgeAbsorbTest direct access to private F-6 state members
+     *  (edge_absorb_active, edge_absorb_progress, edge_absorb_sign,
+     *  edge_absorb_local_timer_s, f6_override_fadeout_snapshot_*, ticks_remaining)
+     *  and ComputeF6 for AC-02, AC-F6-A/B/C/E unit tests.
+     *  Story 007. */
+    friend class FPMEdgeAbsorbTest;
+
+    /** Grants FPMEdgeAbsorbCompositionTest access to private F-6 state and
+     *  internal helpers for Story 007 integration tests (AC-02, AC-F6-B/C/E,
+     *  AC-24 exclusion, §5.1(a) override snapshot correctness).
+     *  Story 007. */
+    friend class FPMEdgeAbsorbCompositionTest;
 #endif // WITH_DEV_AUTOMATION_TESTS
 
 private:
@@ -506,6 +520,62 @@ private:
     static constexpr float HEAD_LAG_PROGRESS  = 0.10f;
     static constexpr float ARM_LEAD_PROGRESS  = 0.05f;
 
+    // -----------------------------------------------------------------------
+    // Story 007 — F-6 edge-absorb tuning constants
+    // TR-PM-009 (F-6 tail duration); TR-PM-028 (EC15 decay coefficient).
+    // -----------------------------------------------------------------------
+
+    /** Duration of the F-6 edge-absorb tail animation (seconds).
+     *  Time axis for edge_absorb_progress ∈ [0,1].
+     *  Safe range [0.20, 0.35].  Design default 0.27s. Story 007. */
+    static constexpr float EDGE_ABSORB_DURATION_S      = 0.27f;
+
+    /** EC15 decay coefficient applied to F-6 outputs during SLIPPING phase 3
+     *  (tween_progress > PHASE3_TP_THRESHOLD).  Preserves ±(MAX_LEAN×1.2) headroom
+     *  when F-5 and F-6 are both at peak simultaneously.
+     *  Safe range [0.6, 1.0].  Design default 0.7.
+     *  TR-PM-028; mechanics §4 F-6 R11a §6.2. Story 007. */
+    static constexpr float EC15_F6_DECAY_COEFFICIENT   = 0.7f;
+
+    /** Tween-progress threshold above which EC15 phase-3 decay is applied to F-6.
+     *  Corresponds to mechanics §4 F-6 R11a-4 "phase 3 start".
+     *  Story 007. */
+    static constexpr float PHASE3_TP_THRESHOLD         = 0.66f;
+
+    // -----------------------------------------------------------------------
+    // Story 007 — F-6 private state members
+    // -----------------------------------------------------------------------
+
+    /** True while a F-6 edge-absorb tail animation is running. */
+    bool edge_absorb_active = false;
+
+    /** Normalised animation progress of the F-6 tail ∈ [0.0, 1.0].
+     *  Derived from edge_absorb_local_timer_s / EDGE_ABSORB_DURATION_S. */
+    float edge_absorb_progress = 0.0f;
+
+    /** Sign of the F-6 lean.  +1 for slip-left edge hit (rightward recoil);
+     *  -1 for slip-right edge hit (leftward recoil, wall-bounce away from right wall).
+     *  CORRECTED: inverted from the brief's pseudocode to satisfy AC-F6-A.
+     *  See story-007 Implementation Notes § Sign deviation. */
+    float edge_absorb_sign = 0.0f;
+
+    /** Elapsed time (seconds) for the running F-6 tail.  Resets to 0 each trigger. */
+    float edge_absorb_local_timer_s = 0.0f;
+
+    /** §5.1(a) Override: body lean snapshot captured when SETTLED→SLIPPING interrupts F-6. */
+    float f6_override_fadeout_snapshot_body = 0.0f;
+
+    /** §5.1(a) Override: head lean snapshot. */
+    float f6_override_fadeout_snapshot_head = 0.0f;
+
+    /** §5.1(a) Override: arm lean snapshot. */
+    float f6_override_fadeout_snapshot_arm  = 0.0f;
+
+    /** §5.1(a) Override: ticks remaining in the 2-frame fade-out ramp (2 → 1 → 0).
+     *  0 = no fade-out active; 2 = first post-override tick (multiplier 1.0);
+     *  1 = second post-override tick (multiplier 0.5). */
+    int32 f6_override_fadeout_ticks_remaining = 0;
+
     /** F-5 body/head/arm lean computation.
      *  Reads LeanCurve at three staggered progress offsets: TP (body), TP-HEAD_LAG (head),
      *  TP+ARM_LEAD (arm). Each component multiplied by MAX_LEAN_ANGLE_DEG * DirectionSign,
@@ -524,4 +594,32 @@ private:
     /** Direction sign for lean — +1 if slipping right (ToLane index > FromLane index),
      *  else -1. Pure math on lane ordinals. Story 006. */
     static float DirectionSign(EPlayerLane FromLane, EPlayerLane ToLane);
+
+    // -----------------------------------------------------------------------
+    // Story 007 — F-6 edge-absorb lean computation
+    // -----------------------------------------------------------------------
+
+    /** F-6 edge-absorb lean computation.
+     *  Computes body, head, and arm lean contributions from the active edge-absorb
+     *  tail animation (or §5.1(a) Override fade-out) and writes them to the output
+     *  reference parameters.
+     *
+     *  Branches:
+     *    1. Fallback (EdgeAbsorbCurve null OR bCurveFallbackActive): all outputs = 0,
+     *       edge_absorb_active forcibly set false (tail collapses per SD6).
+     *    2. edge_absorb_active: sample EdgeAbsorbCurve at staggered progress offsets
+     *       (same HEAD_LAG_PROGRESS / ARM_LEAD_PROGRESS pattern as F-5 ComputeLean).
+     *       Apply EC15 decay (EC15_F6_DECAY_COEFFICIENT) when SLIPPING and
+     *       tween_progress > PHASE3_TP_THRESHOLD. Component clamp to ±(MAX_LEAN×1.2).
+     *    3. §5.1(a) Override fade-out (f6_override_fadeout_ticks_remaining > 0):
+     *       blends snapshot values at multiplier 1.0 (tick 1) or 0.5 (tick 2),
+     *       decrements counter. Added AFTER the active/inactive branch.
+     *    4. Neither active nor fade-out: all outputs = 0.
+     *
+     *  Non-const: decrements f6_override_fadeout_ticks_remaining and may clear
+     *  edge_absorb_active on fallback path.
+     *  O(1) — no allocations on the hot path.
+     *  TR-PM-009 (F-6 tail); TR-PM-028 (EC15 decay); TR-PM-033 (clamp).
+     *  GDD: design/gdd/player-movement-mechanics.md §4 F-6. Story 007. */
+    void ComputeF6(float& OutBody, float& OutHead, float& OutArm);
 };

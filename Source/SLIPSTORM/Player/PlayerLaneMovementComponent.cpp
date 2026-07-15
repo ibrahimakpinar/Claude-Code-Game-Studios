@@ -19,6 +19,11 @@
 //   IHapticDispatch seam interface declaration (ADR-0002 INT-002-amended).
 // Story 006 scope: F-5 body/head/arm lean — ComputeLean, DirectionSign, tick-site
 //   SetRelativeRotation write, SETTLED lean-zero branch. TR-PM-008/029/033.
+// Story 007 scope: F-6 edge-absorb tail — TriggerEdgeAbsorb (body),
+//   ComputeF6 (EdgeAbsorbCurve + EC15 decay + §5.1(a) fade-out), tick restructure
+//   (F-6 advance outside SLIPPING/SETTLED branches, F-5+F-6 co-write sum replacing
+//   F-5-only mesh write, §5.1(a) Override hook in HandleSlipTransition).
+//   TR-PM-009 (F-6 tail); TR-PM-028 (EC15 decay); TR-PM-033 (final clamp).
 // RSM handler bodies by Stories 008–009.
 // Watchdog buffer advance by Story 013.
 
@@ -231,38 +236,6 @@ void UPlayerLaneMovementComponent::TickComponent(
             CachedMeshComponent->SetRelativeLocation(FVector(rel_x, 0.0f, 0.0f));
             lateral_world_position = GetOwner()->GetActorLocation().X + rel_x;
         }
-        // F-5: body/head/arm lean. Body drives mesh rotation via SetRelativeRotation;
-        // head/arm exposed as public properties for skeletal-animation Blueprint consumption.
-        // IG-6: SetActorRotation on pawn root is FORBIDDEN — rotate the mesh component only.
-        // TR-PM-008, TR-PM-029, TR-PM-033. Story 006.
-        if (IsValid(CachedMeshComponent))
-        {
-            float body_lean_deg = 0.0f;
-            float head_lean_deg = 0.0f;
-            float arm_lean_deg  = 0.0f;
-            ComputeLean(tween_progress, current_lane, target_lane,
-                        body_lean_deg, head_lean_deg, arm_lean_deg);
-
-            // Story 007 F-6 co-write will add edge_absorb contribution here before the
-            // final SetRelativeRotation call. For Story 006, apply body_lean directly.
-            //
-            // AXIS: FRotator(Pitch, Yaw, Roll). Lateral lean during a slip is ROLL
-            // (rotation around forward X axis, tilting the character left/right).
-            // NOT Pitch (nod forward/back). Standard UE convention: forward=+X,
-            // right=+Y, up=+Z; SlipstormPlayerPawn applies no mesh-orientation
-            // override so this convention is authoritative. Corrected during
-            // Story 006 /code-review — spec text (story-006 §Implementation Notes,
-            // ADR-0009 IG-6) has `FRotator(lean_angle, 0, 0)` which is Pitch;
-            // corrected here to Roll. Spec + ADR amendments tracked in Story 006
-            // Completion Notes for follow-up alignment pass.
-            CachedMeshComponent->SetRelativeRotation(FRotator(0.0f, 0.0f, body_lean_deg));
-
-            lean_angle      = body_lean_deg;
-            head_lean_angle = head_lean_deg;
-            arm_lean_angle  = arm_lean_deg;
-        }
-        // F-6 site (Story 007): if (edge_absorb_active) AdvanceEdgeAbsorb(effective_dt);
-
         if (tween_progress >= 1.0f)
         {
             CompleteTween();
@@ -273,12 +246,73 @@ void UPlayerLaneMovementComponent::TickComponent(
         // AC: lateral_world_position returns LaneWorldX(current_lane) when SETTLED.
         // Keeps the property fresh for Camera and Pull-Wave targeting consumers.
         lateral_world_position = LaneWorldX(current_lane);
+    }
 
-        // AC-26: SETTLED (with F-6 inactive) → F-5 outputs zero.
-        // Story 007's F-6 tail may leave residual lean during SETTLED entry — that
-        // path co-writes lean_angle. This branch only zeroes F-5's contribution.
-        // Story 007 will refactor if needed. For now, unconditional zero is correct
-        // because F-6 isn't implemented yet.
+    // F-6 tick advance — runs OUTSIDE the SLIPPING/SETTLED branches so the
+    // edge-absorb tail continues while the PM is SETTLED (Rule 1 edge no-op path).
+    // edge_absorb_local_timer_s and edge_absorb_progress are only mutated here and
+    // in TriggerEdgeAbsorb; they are O(1) and allocate nothing on the hot path.
+    // Story 007; TR-PM-009.
+    if (edge_absorb_active)
+    {
+        edge_absorb_local_timer_s += effective_dt;
+        edge_absorb_progress = FMath::Clamp(
+            edge_absorb_local_timer_s / EDGE_ABSORB_DURATION_S, 0.0f, 1.0f);
+
+        if (edge_absorb_progress >= 1.0f)
+        {
+            edge_absorb_active = false;
+        }
+    }
+
+    // F-5 + F-6 co-write — final summed lean angles written to mesh and public props.
+    //
+    // Structure:
+    //   F-5 (ComputeLean): active only during SLIPPING (returns 0 during SETTLED per
+    //     AC-26 / AC-30 — LeanCurve fallback guard already handles null path inside
+    //     ComputeLean; we only call it while SLIPPING to avoid the SETTLED zero-lean
+    //     invariant relying on ComputeLean's internals).
+    //   F-6 (ComputeF6): active during SLIPPING or SETTLED while F-6 tail or fade-out
+    //     is running (called unconditionally; returns 0 when neither is active).
+    //   Final sum re-clamped to ±(MAX_LEAN×1.2) per TR-PM-033 + Control Manifest.
+    //
+    // AXIS: FRotator(Pitch, Yaw, Roll). Lateral lean is ROLL (rotation around
+    // forward X axis). NOT Pitch. Corrected from Story 006 spec text during
+    // /code-review. Story 006 composition test f5_roll_axis_regression_guard gates
+    // this. Story 007 MUST NOT regress it. Story 007; TR-PM-008/028/033.
+    //
+    // IG-6: SetActorRotation on pawn root is FORBIDDEN — rotate the mesh only.
+    if (IsValid(CachedMeshComponent))
+    {
+        // F-5 — non-zero only while SLIPPING (returns zero from ComputeLean fallback
+        // guard when curve is null, but calling during SETTLED is also fine because
+        // DirectionSign(current_lane, target_lane) = -1 when same-lane; combined with
+        // a zero-valued LeanCurve read at TP=0 it would produce 0 anyway). For
+        // correctness and clarity we gate on SLIPPING explicitly.
+        float f5_body = 0.0f, f5_head = 0.0f, f5_arm = 0.0f;
+        if (movement_state == ERunSlipState::SLIPPING)
+        {
+            ComputeLean(tween_progress, current_lane, target_lane,
+                        f5_body, f5_head, f5_arm);
+        }
+
+        // F-6 — active during SLIPPING or SETTLED while tail/fade-out is live.
+        float f6_body = 0.0f, f6_head = 0.0f, f6_arm = 0.0f;
+        ComputeF6(f6_body, f6_head, f6_arm);
+
+        // Final sum + clamp (TR-PM-033; Control Manifest Required).
+        const float max_clamp = MAX_LEAN_ANGLE_DEG * 1.2f;
+        lean_angle      = FMath::Clamp(f5_body + f6_body, -max_clamp, max_clamp);
+        head_lean_angle = FMath::Clamp(f5_head + f6_head, -max_clamp, max_clamp);
+        arm_lean_angle  = FMath::Clamp(f5_arm  + f6_arm,  -max_clamp, max_clamp);
+
+        // Write mesh rotation — Roll axis only (IG-6; Story 006 + 007).
+        CachedMeshComponent->SetRelativeRotation(FRotator(0.0f, 0.0f, lean_angle));
+    }
+    else
+    {
+        // Mesh unavailable — publish zero lean to public props so consumers read
+        // consistent values. AC-26 / AC-30 invariant still satisfied.
         lean_angle      = 0.0f;
         head_lean_angle = 0.0f;
         arm_lean_angle  = 0.0f;
@@ -384,6 +418,24 @@ void UPlayerLaneMovementComponent::HandleSlipTransition(ESlipDirection Dir)
         // Rule 1 edge no-op path — fire edge-absorb hook (Story 007).
         TriggerEdgeAbsorb(current_lane, Dir);
         return;
+    }
+
+    // §5.1(a) Override — if F-6 is mid-tail when SETTLED→SLIPPING fires, snapshot
+    // the current F-6 lean values, arm a 2-frame fade-out, and clear the active tail.
+    // This prevents a discontinuous jump in the co-write sum when the new F-5 tween
+    // starts. The snapshot is captured BEFORE target_lane is updated so ComputeF6
+    // reads the correct SETTLED state (edge_absorb_sign already set; tween_progress
+    // is 0 / irrelevant for the SETTLED branch inside ComputeF6).
+    // R11a §6.1 + §6.2; mechanics §5.1(a); story-007 Implementation Notes. Story 007.
+    if (edge_absorb_active)
+    {
+        ComputeF6(f6_override_fadeout_snapshot_body,
+                  f6_override_fadeout_snapshot_head,
+                  f6_override_fadeout_snapshot_arm);
+        f6_override_fadeout_ticks_remaining = 2;
+        edge_absorb_active            = false;
+        edge_absorb_progress          = 0.0f;
+        edge_absorb_local_timer_s     = 0.0f;
     }
 
     // SETTLED → SLIPPING transition (Rule 2, ADR-0009 SD5).
@@ -667,11 +719,32 @@ void UPlayerLaneMovementComponent::PlayBufferDropAudioSting()
 
 void UPlayerLaneMovementComponent::TriggerEdgeAbsorb(EPlayerLane FromLane, ESlipDirection Dir)
 {
-    // TODO(Story 007): implement F-6 edge-absorb: advance edge overshoot timer,
-    // increment edge_absorb_trigger_count, trigger visual feedback using FromLane
-    // and Dir for direction-specific mesh deformation (e.g., wall-bounce sign).
-    // FromLane: source lane that attempted the off-track slip.
-    // Dir: the direction that was rejected (Left or Right at the boundary).
+    // Story 007: F-6 edge-absorb activation. Called from HandleSlipTransition
+    // when F-4 pre-validation rejects the input as off-track (Rule 1 edge no-op)
+    // OR when a buffered input's F-4 pre-validation vs target_lane fails.
+    //
+    // FromLane: reserved for Story 010 direction-specific mesh-face selection
+    // (wall-bounce visual cue). Not consumed here — the sign is inferred from
+    // Dir alone since at the moment of edge no-op, FromLane == current_lane and
+    // the wall is in the direction of Dir.
+    (void)FromLane;
+
+    edge_absorb_active        = true;
+    edge_absorb_progress      = 0.0f;
+    edge_absorb_local_timer_s = 0.0f;
+
+    // Sign convention per AC-F6-A: recoil AWAY from the wall.
+    //   slip-right at right edge (FarRight)  → leftward  recoil → sign = -1
+    //   slip-left  at left  edge (FarLeft)   → rightward recoil → sign = +1
+    // Story spec §Implementation Notes pseudocode had this inverted; corrected
+    // here to satisfy AC-F6-A "FarRight + slip-right → body/head/arm all negative
+    // at mid-tail" (see .h edge_absorb_sign comment for detail).
+    edge_absorb_sign = (Dir == ESlipDirection::Right) ? -1.0f : +1.0f;
+
+    // Rule 1 counter — increments regardless of curve fallback state
+    // (SD6 fallback note: "edge-absorb trigger still increments the counter
+    // for AC parity even in fallback").
+    ++edge_absorb_trigger_count;
 }
 
 void UPlayerLaneMovementComponent::TriggerCommitmentTell(EPlayerLane TargetLane)
@@ -796,4 +869,97 @@ void UPlayerLaneMovementComponent::ComputeLean(
     OutBodyLean = FMath::Clamp(body_t * MAX_LEAN_ANGLE_DEG * sign, -max_clamp, max_clamp);
     OutHeadLean = FMath::Clamp(head_t * MAX_LEAN_ANGLE_DEG * sign, -max_clamp, max_clamp);
     OutArmLean  = FMath::Clamp(arm_t  * MAX_LEAN_ANGLE_DEG * sign, -max_clamp, max_clamp);
+}
+
+// ---------------------------------------------------------------------------
+// Story 007 — ComputeF6 (F-6 edge-absorb tail + EC15 decay + §5.1(a) fade-out)
+//
+// Three-branch composition:
+//   1. Fallback (EdgeAbsorbCurve null OR bCurveFallbackActive):
+//      All outputs 0; force edge_absorb_active = false so the tail collapses
+//      immediately per SD6 fallback semantic ("edge-absorb trigger still
+//      increments edge_absorb_trigger_count for AC parity" — but no visual tail).
+//   2. Active branch (edge_absorb_active): sample EdgeAbsorbCurve at three
+//      staggered progress offsets (body raw, head TP-HEAD_LAG, arm TP+ARM_LEAD).
+//      Multiply by MAX_LEAN_ANGLE_DEG * edge_absorb_sign. During SLIPPING with
+//      tween_progress > PHASE3_TP_THRESHOLD, multiply each output by
+//      EC15_F6_DECAY_COEFFICIENT (R11a §6.2 headroom-preserving decay).
+//   3. Inactive branch (no edge-absorb): outputs 0.
+//
+// Then the §5.1(a) Override snapshot ADDS its fade-out contribution on top
+// (multiplier ramp 1.0 → 0.5 → 0). This decrements ticks_remaining as a side
+// effect — one call to ComputeF6 consumes exactly one tick's worth of fade-out.
+//
+// Final component-level clamp to ±(MAX_LEAN_ANGLE_DEG × 1.2) per TR-PM-033.
+// Story 007; TR-PM-009 + TR-PM-028.
+// ---------------------------------------------------------------------------
+
+void UPlayerLaneMovementComponent::ComputeF6(float& OutBody, float& OutHead, float& OutArm)
+{
+    // --- Branch 1: fallback → immediate zero + collapse the tail state ---
+    if (!EdgeAbsorbCurve || bCurveFallbackActive)
+    {
+        OutBody = 0.0f;
+        OutHead = 0.0f;
+        OutArm  = 0.0f;
+        // Collapse per SD6 fallback: no tail-phase animation. Counter was
+        // already incremented in TriggerEdgeAbsorb; this line ensures we don't
+        // spin on a permanently-active tail in a null-curve scenario.
+        edge_absorb_active = false;
+    }
+    // --- Branch 2: active edge-absorb tail ---
+    else if (edge_absorb_active)
+    {
+        // Body: sampled at raw progress (already in [0,1] per tick-advance clamp).
+        const float body_t = EdgeAbsorbCurve->GetFloatValue(
+            FMath::Clamp(edge_absorb_progress, 0.0f, 1.0f));
+        // Head: lags by HEAD_LAG_PROGRESS. Input clamped to [0, ∞) via Max.
+        const float head_t = EdgeAbsorbCurve->GetFloatValue(
+            FMath::Max(0.0f, edge_absorb_progress - HEAD_LAG_PROGRESS));
+        // Arm: leads by ARM_LEAD_PROGRESS. Input clamped to (-∞, 1.0] via Min.
+        const float arm_t = EdgeAbsorbCurve->GetFloatValue(
+            FMath::Min(1.0f, edge_absorb_progress + ARM_LEAD_PROGRESS));
+
+        OutBody = body_t * MAX_LEAN_ANGLE_DEG * edge_absorb_sign;
+        OutHead = head_t * MAX_LEAN_ANGLE_DEG * edge_absorb_sign;
+        OutArm  = arm_t  * MAX_LEAN_ANGLE_DEG * edge_absorb_sign;
+
+        // Phase-3 EC15 decay: applies only when SLIPPING AND past the phase-3
+        // TP threshold. Purpose: preserve ±(MAX_LEAN × 1.2) headroom against the
+        // F-5 + F-6 sum in the tail of a slip. R11a §6.2; TR-PM-028.
+        if (movement_state == ERunSlipState::SLIPPING && tween_progress > PHASE3_TP_THRESHOLD)
+        {
+            OutBody *= EC15_F6_DECAY_COEFFICIENT;
+            OutHead *= EC15_F6_DECAY_COEFFICIENT;
+            OutArm  *= EC15_F6_DECAY_COEFFICIENT;
+        }
+    }
+    // --- Branch 3: inactive edge-absorb → zero ---
+    else
+    {
+        OutBody = 0.0f;
+        OutHead = 0.0f;
+        OutArm  = 0.0f;
+    }
+
+    // --- §5.1(a) Override fade-out contribution (additive on top of base branch) ---
+    // Multiplier ramp per R11a-3 lockstep:
+    //   ticks_remaining == 2 → multiplier 1.0 (first post-Override tick)
+    //   ticks_remaining == 1 → multiplier 0.5 (second post-Override tick)
+    //   ticks_remaining == 0 → no contribution
+    // Decrement happens at end of block so one ComputeF6 call consumes one tick.
+    if (f6_override_fadeout_ticks_remaining > 0)
+    {
+        const float multiplier = (f6_override_fadeout_ticks_remaining == 2) ? 1.0f : 0.5f;
+        OutBody += f6_override_fadeout_snapshot_body * multiplier;
+        OutHead += f6_override_fadeout_snapshot_head * multiplier;
+        OutArm  += f6_override_fadeout_snapshot_arm  * multiplier;
+        --f6_override_fadeout_ticks_remaining;
+    }
+
+    // --- Component-level clamp to ±(MAX_LEAN × 1.2) per TR-PM-033 ---
+    const float max_clamp = MAX_LEAN_ANGLE_DEG * 1.2f;
+    OutBody = FMath::Clamp(OutBody, -max_clamp, max_clamp);
+    OutHead = FMath::Clamp(OutHead, -max_clamp, max_clamp);
+    OutArm  = FMath::Clamp(OutArm,  -max_clamp, max_clamp);
 }
