@@ -17,6 +17,7 @@
 // Story: production/epics/player-movement/story-003-state-machine-tick-body.md
 // Story: production/epics/player-movement/story-005-input-buffer.md
 // Story: production/epics/player-movement/story-007-f6-edge-absorb.md
+// Story: production/epics/player-movement/story-008-terminal-state-handlers.md
 
 #pragma once
 
@@ -33,6 +34,11 @@
 // Forward declarations
 class URunStateMachineSubsystem;
 class UStaticMeshComponent;
+
+// EMovementState is a plain enum class (not UENUM) — forward-declarable in the header.
+// Full definition lives in Seam/PlayerMovementProvider.h; included in the .cpp only
+// to keep this header transitive-include-clean. Story 008 AC-SS-B.
+enum class EMovementState : uint8;
 
 // ---------------------------------------------------------------------------
 // Log category
@@ -250,6 +256,17 @@ public:
     void HandlePausedChanged(bool bIsPaused, double Timestamp);
 
     // -----------------------------------------------------------------------
+    // Story 008 — Seam accessor (AC-SS-B)
+    // -----------------------------------------------------------------------
+
+    /** Returns the current movement state as EMovementState for Pull-Wave / Seam 12 consumption.
+     *  Switch on ERunSlipState; default: branch returns EMovementState::SETTLED as a
+     *  corruption-safe fallback (AC-SS-B).
+     *  Defined out-of-line in the .cpp (includes Seam/PlayerMovementProvider.h there only).
+     *  Story 008; ADR-0009 Seam 12 (IPlayerMovementProvider). */
+    EMovementState GetMovementStateExternal() const;
+
+    // -----------------------------------------------------------------------
     // Story 003 — public-facing input entry point
     // -----------------------------------------------------------------------
 
@@ -325,6 +342,16 @@ public:
      *  AC-24 exclusion, §5.1(a) override snapshot correctness).
      *  Story 007. */
     friend class FPMEdgeAbsorbCompositionTest;
+
+    /** Grants FPMTerminalStatesTest direct access to private state fields
+     *  (edge_absorb_active, edge_absorb_progress, edge_absorb_local_timer_s,
+     *  edge_absorb_sign, f6_override_fadeout_ticks_remaining,
+     *  movement_state, current_lane, target_lane, tween_progress,
+     *  slip_complete_count, edge_absorb_trigger_count, commitment_tell_fire_count)
+     *  and private helpers (HandleStateChanged direct call via friend access,
+     *  SnapToTargetAndReset, DiscardBuffer) for Story 008 integration tests
+     *  (AC-14 through AC-SS-B). Story 008. */
+    friend class FPMTerminalStatesTest;
 #endif // WITH_DEV_AUTOMATION_TESTS
 
 private:
@@ -475,6 +502,28 @@ private:
      *  buffer per AC-13.
      *  Published in Story 005; invocation by Story 008. */
     void DiscardBuffer();
+
+    // -----------------------------------------------------------------------
+    // Story 008 — terminal-state snap helper
+    // -----------------------------------------------------------------------
+
+    /** Snap-and-reset helper for COMPLETE / ABORTED / COUNTDOWN (ADR-0009 SD5).
+     *  Writes:
+     *    current_lane  = target_lane      (committed snap to destination)
+     *    movement_state = SETTLED
+     *    tween_progress = 0.0f
+     *    lean_angle = head_lean_angle = arm_lean_angle = 0.0f
+     *  Then resets F-6 state to its zero-baseline:
+     *    edge_absorb_active = false
+     *    edge_absorb_progress = 0.0f
+     *    edge_absorb_sign     = 0.0f
+     *    edge_absorb_local_timer_s = 0.0f
+     *    f6_override_fadeout_snapshot_body/head/arm = 0.0f
+     *    f6_override_fadeout_ticks_remaining = 0
+     *  Does NOT modify counters (caller's responsibility).
+     *  Does NOT call ForceTickNow or broadcast any delegate (ADR-0007 SD2).
+     *  Story 008; TR-PM-018 (COMPLETE/ABORTED snap); TR-PM-016 (counters by caller). */
+    void SnapToTargetAndReset();
 
     /** Presentation dispatch stub for buffer-drop audio feedback (Rule 3 drop path).
      *  Fires synchronously within the same HandleSlipTransition event call (AC-25).

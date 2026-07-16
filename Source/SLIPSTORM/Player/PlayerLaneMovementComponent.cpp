@@ -24,7 +24,13 @@
 //   (F-6 advance outside SLIPPING/SETTLED branches, F-5+F-6 co-write sum replacing
 //   F-5-only mesh write, §5.1(a) Override hook in HandleSlipTransition).
 //   TR-PM-009 (F-6 tail); TR-PM-028 (EC15 decay); TR-PM-033 (final clamp).
-// RSM handler bodies by Stories 008–009.
+// Story 008 scope: HandleStateChanged full switch (DEAD/COMPLETE/ABORTED/COUNTDOWN/IDLE),
+//   AC-F6-D DEAD guard on F-6 tick advance (defense-in-depth; Rule 5 gate already stops
+//   F-6 advance on DEAD via the RUNNING check at cpp line ~202), SnapToTargetAndReset
+//   helper (TR-PM-018), GetMovementStateExternal accessor (AC-SS-B / Seam 12).
+//   TR-PM-015 (monotonic counters), TR-PM-016 (reset on COUNTDOWN), TR-PM-017 (DEAD freeze),
+//   TR-PM-018 (COMPLETE/ABORTED snap). Non-callback invariant: ADR-0007 SD2.
+// Story 009 scope: HandlePausedChanged body. (deferred)
 // Watchdog buffer advance by Story 013.
 
 #include "Player/PlayerLaneMovementComponent.h"
@@ -35,6 +41,7 @@
 #include "Engine/GameInstance.h"
 #include "Misc/App.h"  // FApp::GetDeltaTime() — F-PROLOGUE (Story 002)
 #include "Seam/IHapticDispatch.h"             // ADR-0002 INT-002-amended haptic bridge — Story 005
+#include "Seam/PlayerMovementProvider.h"      // EMovementState (plain enum class) — Story 008 AC-SS-B
 
 DEFINE_LOG_CATEGORY(LogPlayerMovement);
 
@@ -253,7 +260,15 @@ void UPlayerLaneMovementComponent::TickComponent(
     // edge_absorb_local_timer_s and edge_absorb_progress are only mutated here and
     // in TriggerEdgeAbsorb; they are O(1) and allocate nothing on the hot path.
     // Story 007; TR-PM-009.
-    if (edge_absorb_active)
+    //
+    // AC-F6-D (Story 008 defense-in-depth): guard on DEAD so the F-6 state snapshot
+    // is preserved for Death Replay even if this code path is reached. In practice
+    // the Rule 5 gate at ~line 202 (RUNNING check) already prevents execution here
+    // when RSM is DEAD — this guard is redundant but required by the story spec as
+    // explicit defense-in-depth. TR-PM-017.
+    const bool bRunStateDead = RSMSubsystem
+        && (RSMSubsystem->GetCurrentState() == ERunState::DEAD);
+    if (edge_absorb_active && !bRunStateDead)
     {
         edge_absorb_local_timer_s += effective_dt;
         edge_absorb_progress = FMath::Clamp(
@@ -320,7 +335,30 @@ void UPlayerLaneMovementComponent::TickComponent(
 }
 
 // ---------------------------------------------------------------------------
-// RSM delegate handlers — empty bodies (Stories 008 / 009).
+// RSM delegate handlers
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// HandleStateChanged — Story 008.
+//
+// Implements terminal-state handlers for all RSM state entries:
+//   DEAD       — freeze F-6 in place (TR-PM-017 / AC-F6-D); commit source-lane
+//                if SLIPPING; discard buffer. Counters PRESERVED (TR-PM-015).
+//   COMPLETE   — SnapToTargetAndReset + discard buffer. Counters PRESERVED.
+//   ABORTED    — SnapToTargetAndReset + discard buffer. Counters PRESERVED.
+//   COUNTDOWN  — SnapToTargetAndReset + discard buffer + RESET counters
+//                (TR-PM-016: only COUNTDOWN resets slip_complete_count,
+//                edge_absorb_trigger_count, commitment_tell_fire_count).
+//   IDLE       — discard buffer; reset F-6 state to zero baseline.
+//                Counters PRESERVED (no counter reset on IDLE per spec).
+//   All others (RUNNING, RESOLVING) — no-op (PM self-activates via tick).
+//
+// Non-callback invariant (ADR-0007 SD2):
+//   MUST NOT call RSMSubsystem->ForceTickNow().
+//   MUST NOT broadcast OnSlipMidpoint.
+//   MUST NOT modify RSM state.
+//
+// PreviousState, Outcome, and Timestamp are unused by this story; (void)-cast.
 // ---------------------------------------------------------------------------
 
 void UPlayerLaneMovementComponent::HandleStateChanged(
@@ -332,8 +370,123 @@ void UPlayerLaneMovementComponent::HandleStateChanged(
 #if WITH_DEV_AUTOMATION_TESTS
     ++HandleStateChanged_TestOnlyCallCount;
 #endif // WITH_DEV_AUTOMATION_TESTS
-    // TODO(Story 008): implement DEAD/COMPLETE/ABORTED/COUNTDOWN switch bodies
-    // + AC-SS-B runtime default-branch behavior + counter reset semantics.
+
+    // Suppress unused-parameter warnings — ADR-0007 SD2 prohibits acting on these.
+    (void)PreviousState;
+    (void)Outcome;
+    (void)Timestamp;
+
+    switch (NewState)
+    {
+    // -----------------------------------------------------------------------
+    // DEAD — freeze everything, preserve F-6 state for Death Replay (AC-F6-D).
+    // TR-PM-017; ADR-0009 SD5 (DEAD freeze semantic).
+    // -----------------------------------------------------------------------
+    case ERunState::DEAD:
+    {
+        // Rule 7 — DEAD freeze (TR-PM-017). Preserve tween_progress, mesh
+        // transforms, F-5 lean, F-6 state for Death Replay. Do NOT snap.
+        // Only actions:
+        //   1. Commit source-lane semantic (current_lane = target_lane) if SLIPPING.
+        //   2. Mark movement_state = SETTLED so no more slip mechanics run.
+        //   3. Discard buffered input (no slip fires post-death).
+        //
+        // R7-PM-PROPAGATION-REVIEW §DEAD handling. This is one of only two
+        // legal write sites for current_lane = target_lane; CompleteTween is
+        // the other.
+        if (movement_state == ERunSlipState::SLIPPING)
+        {
+            current_lane = target_lane;
+        }
+        movement_state = ERunSlipState::SETTLED;
+
+        // Discard any pending input — no buffered slip should fire post-death.
+        // AC-13 pause exemption does NOT apply here.
+        DiscardBuffer();
+
+        // Explicitly NOT touched (preserved for Death Replay per AC-14 / AC-31 / AC-F6-D):
+        //   - tween_progress: bit-exact preserved (AC-14 boundary tests TP=0.001, 0.999)
+        //   - lean_angle / head_lean_angle / arm_lean_angle: frozen (AC-31)
+        //   - mesh relative transforms (SetRelativeLocation / SetRelativeRotation):
+        //     no writes → last SLIPPING-tick values persist
+        //   - F-6 state (edge_absorb_active, progress, sign, local_timer_s,
+        //     f6_override_fadeout_*): preserved (AC-F6-D). F-6 tick advance guard
+        //     at cpp:~271 prevents subsequent ticks from mutating progress/timer.
+        //   - Counters (slip_complete_count, edge_absorb_trigger_count,
+        //     commitment_tell_fire_count): preserved (TR-PM-015, AC-COUNTER-DEAD).
+        break;
+    }
+
+    // -----------------------------------------------------------------------
+    // COMPLETE — snap mesh to destination, reset movement state. TR-PM-018.
+    // -----------------------------------------------------------------------
+    case ERunState::COMPLETE:
+    {
+        SnapToTargetAndReset();
+        DiscardBuffer();
+        // Counters preserved — COMPLETE does not reset monotonic counters (TR-PM-015).
+        break;
+    }
+
+    // -----------------------------------------------------------------------
+    // ABORTED — same snap behavior as COMPLETE. TR-PM-018.
+    // -----------------------------------------------------------------------
+    case ERunState::ABORTED:
+    {
+        SnapToTargetAndReset();
+        DiscardBuffer();
+        // Counters preserved — ABORTED does not reset monotonic counters (TR-PM-015).
+        break;
+    }
+
+    // -----------------------------------------------------------------------
+    // COUNTDOWN — snap + discard + RESET counters. TR-PM-016.
+    // This is the ONLY state entry that resets the monotonic counters.
+    // -----------------------------------------------------------------------
+    case ERunState::COUNTDOWN:
+    {
+        // Set current_lane and target_lane to Center before SnapToTargetAndReset
+        // so the snap writes current_lane = target_lane = Center (new-run start).
+        current_lane = EPlayerLane::Center;
+        target_lane  = EPlayerLane::Center;
+        SnapToTargetAndReset();
+        DiscardBuffer();
+
+        // Counter reset — ONLY on COUNTDOWN (TR-PM-016 monotonic counter semantics).
+        slip_complete_count         = 0;
+        edge_absorb_trigger_count   = 0;
+        commitment_tell_fire_count  = 0;
+        break;
+    }
+
+    // -----------------------------------------------------------------------
+    // IDLE — discard buffer; reset F-6 state to zero baseline.
+    // Counters are PRESERVED on IDLE (TR-PM-015: only COUNTDOWN resets counters).
+    // AC-COUNTER-F6-RESET requires F-6 reset on IDLE (alongside COMPLETE/ABORTED/COUNTDOWN).
+    // -----------------------------------------------------------------------
+    case ERunState::IDLE:
+    {
+        DiscardBuffer();
+
+        // Reset F-6 state fully on IDLE (session ended or pre-run state).
+        edge_absorb_active                = false;
+        edge_absorb_progress              = 0.0f;
+        edge_absorb_sign                  = 0.0f;
+        edge_absorb_local_timer_s         = 0.0f;
+        f6_override_fadeout_snapshot_body = 0.0f;
+        f6_override_fadeout_snapshot_head = 0.0f;
+        f6_override_fadeout_snapshot_arm  = 0.0f;
+        f6_override_fadeout_ticks_remaining = 0;
+        break;
+    }
+
+    // -----------------------------------------------------------------------
+    // RUNNING / RESOLVING / default — no-op on HandleStateChanged.
+    // PM self-activates through TickComponent when RSM is RUNNING.
+    // -----------------------------------------------------------------------
+    default:
+        break;
+    }
 }
 
 void UPlayerLaneMovementComponent::HandlePausedChanged(
@@ -341,6 +494,8 @@ void UPlayerLaneMovementComponent::HandlePausedChanged(
     double Timestamp)
 {
     // TODO(Story 009): implement pause freeze / resume-grace integration.
+    (void)bIsPaused;
+    (void)Timestamp;
 }
 
 // ---------------------------------------------------------------------------
@@ -962,4 +1117,85 @@ void UPlayerLaneMovementComponent::ComputeF6(float& OutBody, float& OutHead, flo
     OutBody = FMath::Clamp(OutBody, -max_clamp, max_clamp);
     OutHead = FMath::Clamp(OutHead, -max_clamp, max_clamp);
     OutArm  = FMath::Clamp(OutArm,  -max_clamp, max_clamp);
+}
+
+// ---------------------------------------------------------------------------
+// Story 008 — SnapToTargetAndReset (COMPLETE / ABORTED / COUNTDOWN helper).
+//
+// Snap pawn root to LaneWorldX(target_lane); reset mesh relative transforms to
+// zero; reset F-2 tween state, F-5 lean, F-6 state to zero. Does NOT touch
+// counters (COMPLETE/ABORTED preserve them; COUNTDOWN zeros them separately
+// in HandleStateChanged). Does NOT call DiscardBuffer (caller invokes).
+//
+// TR-PM-018 (COMPLETE/ABORTED snap-and-reset behavior).
+// ADR-0009 SD5 (collision commit via SetActorLocation on pawn root).
+// FRotator Roll axis convention preserved (Story 006 correction).
+// ---------------------------------------------------------------------------
+
+void UPlayerLaneMovementComponent::SnapToTargetAndReset()
+{
+    // 1. Logical lane commit — current_lane == target_lane after snap.
+    //    (Caller may have already set both to a specific value like Center for
+    //    COUNTDOWN; this write is idempotent in that case.)
+    current_lane = target_lane;
+
+    // 2. Root at target lane world X. bSweep=false skips Chaos physics resolution
+    //    (SD5 collision commit invariant).
+    if (AActor* Owner = GetOwner())
+    {
+        Owner->SetActorLocation(
+            FVector(LaneWorldX(target_lane), 0.0f, 0.0f),
+            /*bSweep=*/false);
+    }
+
+    // 3. Mesh transforms at zero relative (both location AND rotation).
+    //    Roll axis convention (Story 006 correction preserved).
+    if (IsValid(CachedMeshComponent))
+    {
+        CachedMeshComponent->SetRelativeLocation(FVector::ZeroVector);
+        CachedMeshComponent->SetRelativeRotation(FRotator::ZeroRotator);
+    }
+
+    // 4. Public property mirror of mesh world position.
+    lateral_world_position = LaneWorldX(target_lane);
+
+    // 5. Reset F-2 tween state.
+    tween_progress = 0.0f;
+    movement_state = ERunSlipState::SETTLED;
+
+    // 6. Reset F-5 lean angles (AC-16, AC-28, AC-32).
+    lean_angle      = 0.0f;
+    head_lean_angle = 0.0f;
+    arm_lean_angle  = 0.0f;
+
+    // 7. Reset F-6 state fully (AC-COUNTER-F6-RESET applies on COMPLETE/ABORTED/COUNTDOWN).
+    edge_absorb_active                  = false;
+    edge_absorb_progress                = 0.0f;
+    edge_absorb_local_timer_s           = 0.0f;
+    edge_absorb_sign                    = 0.0f;
+    f6_override_fadeout_ticks_remaining = 0;
+    f6_override_fadeout_snapshot_body   = 0.0f;
+    f6_override_fadeout_snapshot_head   = 0.0f;
+    f6_override_fadeout_snapshot_arm    = 0.0f;
+}
+
+// ---------------------------------------------------------------------------
+// Story 008 — GetMovementStateExternal (AC-SS-B Seam 12 accessor).
+//
+// Converts internal ERunSlipState to the ordinal-locked Seam 12 EMovementState
+// (defined in Seam/PlayerMovementProvider.h). Ordinals must match per the
+// lockstep note in ERunSlipState.h:5.
+//
+// AC-SS-B: default: branch returns EMovementState::SETTLED as a safe fallback
+// for any corrupt ordinal. This is the required grep-verifiable switch site.
+// ---------------------------------------------------------------------------
+
+EMovementState UPlayerLaneMovementComponent::GetMovementStateExternal() const
+{
+    switch (movement_state)
+    {
+    case ERunSlipState::SETTLED:  return EMovementState::SETTLED;
+    case ERunSlipState::SLIPPING: return EMovementState::SLIPPING;
+    default:                       return EMovementState::SETTLED; // AC-SS-B safe fallback
+    }
 }
