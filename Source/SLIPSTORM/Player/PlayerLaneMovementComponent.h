@@ -34,6 +34,7 @@
 // Forward declarations
 class URunStateMachineSubsystem;
 class UStaticMeshComponent;
+class UMaterialInstanceDynamic;
 
 // EMovementState is a plain enum class (not UENUM) — forward-declarable in the header.
 // Full definition lives in Seam/PlayerMovementProvider.h; included in the .cpp only
@@ -361,6 +362,15 @@ public:
      *  HandlePausedChanged_TestOnlyCallCount) for Story 009 integration tests
      *  (AC-11/12/13/24/COUNTER-PAUSE-RESUME). Story 009. */
     friend class FPMPauseGraceTest;
+
+    /** Grants FPMCommitmentTellTest direct access to flash lifecycle state
+     *  for cadence cap, counter, sign, and null-guarded write path tests. Story 010. */
+    friend class FPMCommitmentTellTest;
+
+    /** Test-only: increments once per LeadingFaceFlash SetScalarParameterValue call.
+     *  Verifies cadence cap suppression by counting actual material writes vs
+     *  the always-incrementing commitment_tell_fire_count. Story 010. */
+    int32 CommitmentTellFlashWrite_TestOnlyCallCount = 0;
 #endif // WITH_DEV_AUTOMATION_TESTS
 
 private:
@@ -587,6 +597,16 @@ private:
     // TR-PM-009 (F-6 tail duration); TR-PM-028 (EC15 decay coefficient).
     // -----------------------------------------------------------------------
 
+    /** Commitment-tell flash peak amplitude (LeadingFaceFlash material param).
+     *  ±0.80 per R11a-11 PEAT/Harding FPA reduction from ±1.0. Safe [0.60, 0.80].
+     *  Story 010; TR-PM-013. */
+    static constexpr float COMMIT_FLASH_AMPLITUDE = 0.80f;
+
+    /** Cadence cap for commitment-tell visual (milliseconds). Counter always
+     *  increments; visual suppressed if new fire within this window from prior
+     *  fade-to-zero. Safe [150, 250]. Story 010 TR-PM-014. */
+    static constexpr float COMMIT_FLASH_CADENCE_MS = 200.0f;
+
     /** Duration of the F-6 edge-absorb tail animation (seconds).
      *  Time axis for edge_absorb_progress ∈ [0,1].
      *  Safe range [0.20, 0.35].  Design default 0.27s. Story 007. */
@@ -637,6 +657,42 @@ private:
      *  0 = no fade-out active; 2 = first post-override tick (multiplier 1.0);
      *  1 = second post-override tick (multiplier 0.5). */
     int32 f6_override_fadeout_ticks_remaining = 0;
+
+    // -----------------------------------------------------------------------
+    // Story 010 — commitment-tell flash material write target
+    // -----------------------------------------------------------------------
+
+    /** Cached mesh material instance dynamic — resolved at BeginPlay from
+     *  CachedMeshComponent's slot 0 material. Nullable; commitment-tell writes
+     *  are null-guarded. Story 010 (Art Bible LeadingFaceFlash scalar param). */
+    UPROPERTY()
+    TObjectPtr<UMaterialInstanceDynamic> MeshMaterialDynamic;
+
+    // -----------------------------------------------------------------------
+    // Story 010 — commitment-tell flash lifecycle state
+    // -----------------------------------------------------------------------
+
+    /** Ticks remaining in the 2-frame flash hold. Decrements per SLIPPING/SETTLED
+     *  Rule-5-gated tick. When counter reaches 0, decay phase begins. Story 010. */
+    int32 flash_hold_ticks_remaining = 0;
+
+    /** True while the 50ms linear decay from ±0.80 to 0 is running. Set true
+     *  when hold ticks reach 0; cleared when decay time reaches 0. Story 010. */
+    bool flash_decay_active = false;
+
+    /** Remaining decay time in seconds. Starts at 0.050 when decay begins;
+     *  decrements per-tick by effective_dt. Story 010. */
+    float flash_decay_time_s = 0.0f;
+
+    /** Sign of the current flash (±1). Captured at TriggerCommitmentTell so the
+     *  decay ramp can multiply by ±0.80 without re-computing the direction. Story 010. */
+    float sign_of_current_flash = 0.0f;
+
+    /** World time (seconds) when the last flash decay completed (fade-to-zero
+     *  moment). Cadence gate compares (current_time - this) against
+     *  COMMIT_FLASH_CADENCE_MS/1000. Initialised to -1000.0f so the first fire
+     *  always passes the cadence gate. Story 010. */
+    float time_last_flash_zero_s = -1000.0f;
 
     /** F-5 body/head/arm lean computation.
      *  Reads LeanCurve at three staggered progress offsets: TP (body), TP-HEAD_LAG (head),

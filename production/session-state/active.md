@@ -34,9 +34,30 @@ Committed commits on `main`:
   - TC7: dt=0.1 comment clarification (only applies to post-unpause tick, not paused ticks)
 - Build post-fix: Result: Succeeded (11.32 s; 0 errors, 0 warnings)
 - Both reviews were the cleanest of the session — no correctness bugs, no ADR violations, no BLOCKING issues. Attributed to Story 009's trivial scope (logging-only body).
-- /story-done complete (2026-08-02): COMPLETE WITH NOTES. All 7 ACs covered, 3 code-review suggestions applied inline, 2 ADVISORY notes (both recurring session-wide drift patterns).
-- Story 009 file `Status: Complete`. Ready to commit.
-- Next: commit Story 009 → session close (9/13 complete).
+- Story 009 committed: `edf6b22` (5 files, 1001 insertions). Player Movement 9/13 complete.
+
+### Story 010 dev-story complete (2026-08-02, first Visual/Feel story in epic)
+
+- Agent stalled at "Now extend SnapToTargetAndReset..." — 6th consecutive stall this session. Header + 4 of 5 code sites landed pre-stall; SnapToTargetAndReset extension landed but test file + evidence doc were missing. Finished both inline.
+- Files: PLMC.h (+~50 lines: forward decl, 2 constants, 5 lifecycle fields, MID UPROPERTY, test counter, friend), PLMC.cpp (+~120: BeginPlay MID resolution, per-tick lifecycle advance inside Rule 5, TriggerCommitmentTell body, SnapToTargetAndReset extension), PMCommitmentTellTest.cpp (new 17KB, 7 test commands), production/qa/evidence/story-010-commitment-tell-evidence.md (new scaffold with 3 manual checks + PEAT deferral).
+- Build history: build 16 failed (I accidentally left XML tool-invocation tags at EOF in test file — same class of self-inflicted error I need to watch for). Build 17: Result: Succeeded (7.59 s; 0 errors, 0 warnings).
+- Signature convention: `TriggerCommitmentTell(EPlayerLane)` matches spec — first story this session with no signature drift.
+- Grep gates: no SetActorRotation, Rule 5 gate unchanged, FRotator Roll preserved.
+- /code-review complete (2026-08-02): unreal-specialist CHANGES REQUIRED + qa-tester GAPS. **Two BLOCKING findings** (both agents converged):
+  1. TC7 assertion `time_last_flash_zero_s == 0.0f` contradicted impl (`-1000.0f` sentinel per PLMC.cpp:1285). Would fail at runtime.
+  2. TC1/TC5/TC6 material write assertions were passing trivially — `SlipstormPlayerPawn` has no default slot-0 material, so `CreateAndSetMaterialInstanceDynamic(0)` returns null in headless, all writes silently no-op.
+- All 4 fixes applied:
+  1. TC7 assertion corrected to -1000.0f (sentinel)
+  2. MID injection via friend access at top of TC1, TC5, TC6 (inside RunTest scope; helper can't access private members)
+  3. New TC8 `null_mid_null_guard_no_ops_write` explicitly tests the null-guard path
+  4. Story doc test path reference updated
+- Build history: 16 XML tags at EOF (self-inflicted), 17 clean, 18 MID-injection-in-helper-fails (private-access), 19 MID-injection-in-body clean.
+- Test count: 8 commands (was 7).
+- Build result: Succeeded (9.60 s; 0 errors, 0 warnings).
+- Notable: unreal-specialist caught the pawn-has-no-default-material issue that would have made 3 of 7 tests silently false-positive. qa-tester caught the TC7 sentinel drift. Both blocking, both fixed.
+- /story-done complete (2026-08-02): COMPLETE WITH NOTES. 7/7 ACs addressed (5 covered + 2 deferred per R12a-PENDING spec). 5 ADVISORY notes logged.
+- Story 010 file `Status: Complete`. Ready to commit.
+- Next: commit Story 010 → session close (10/13 complete).
 
 ### Follow-up items (unchanged from prior handoff)
 

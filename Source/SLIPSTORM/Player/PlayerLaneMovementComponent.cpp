@@ -42,6 +42,7 @@
 #include "Misc/App.h"  // FApp::GetDeltaTime() — F-PROLOGUE (Story 002)
 #include "Seam/IHapticDispatch.h"             // ADR-0002 INT-002-amended haptic bridge — Story 005
 #include "Seam/PlayerMovementProvider.h"      // EMovementState (plain enum class) — Story 008 AC-SS-B
+#include "Materials/MaterialInstanceDynamic.h"  // Story 010: commitment-tell flash write
 
 DEFINE_LOG_CATEGORY(LogPlayerMovement);
 
@@ -106,6 +107,21 @@ void UPlayerLaneMovementComponent::BeginPlay()
         UE_LOG(LogPlayerMovement, Warning,
             TEXT("PlayerLaneMovementComponent::BeginPlay — GetOwner() is not ASlipstormPlayerPawn. "
                  "CachedMeshComponent unresolved; F-3 lateral interpolation will skip mesh writes."));
+    }
+
+    // --- 1c. Resolve MeshMaterialDynamic — Story 010 commitment-tell write target ---
+    // Slot 0 = per Art Bible authoring — confirm with art-director if this changes.
+    // Nullable: if creation fails (headless test, missing material), commitment-tell
+    // counter still increments; only the visual flash write no-ops.
+    if (IsValid(CachedMeshComponent))
+    {
+        MeshMaterialDynamic = CachedMeshComponent->CreateAndSetMaterialInstanceDynamic(0);
+        if (!IsValid(MeshMaterialDynamic))
+        {
+            UE_LOG(LogPlayerMovement, Warning,
+                TEXT("Story 010: CreateAndSetMaterialInstanceDynamic returned null. "
+                     "Commitment-tell flash writes will no-op; counter still increments."));
+        }
     }
 
     // --- 2. Validate curve assets ---
@@ -331,6 +347,43 @@ void UPlayerLaneMovementComponent::TickComponent(
         lean_angle      = 0.0f;
         head_lean_angle = 0.0f;
         arm_lean_angle  = 0.0f;
+    }
+
+    // Story 010: commitment-tell flash lifecycle advance (2-frame hold + 50ms decay).
+    // Runs INSIDE the Rule 5 RUNNING gate (above) — flash lifecycle only advances
+    // during active gameplay, never during pause/grace/non-RUNNING states.
+    if (flash_hold_ticks_remaining > 0)
+    {
+        --flash_hold_ticks_remaining;
+        if (flash_hold_ticks_remaining == 0)
+        {
+            // Hold phase complete — start decay from ±0.80 to 0.
+            flash_decay_active = true;
+            flash_decay_time_s = 0.050f; // 50ms decay per TR-PM-013.
+        }
+    }
+    else if (flash_decay_active)
+    {
+        flash_decay_time_s -= effective_dt;
+        // Ramp from ±0.80 → 0 over 50ms. t = remaining / total (1.0 → 0.0).
+        const float t = FMath::Clamp(flash_decay_time_s / 0.050f, 0.0f, 1.0f);
+        if (IsValid(MeshMaterialDynamic))
+        {
+            MeshMaterialDynamic->SetScalarParameterValue(
+                TEXT("LeadingFaceFlash"),
+                sign_of_current_flash * COMMIT_FLASH_AMPLITUDE * t);
+#if WITH_DEV_AUTOMATION_TESTS
+            ++CommitmentTellFlashWrite_TestOnlyCallCount;
+#endif
+        }
+        if (flash_decay_time_s <= 0.0f)
+        {
+            // Fade-to-zero moment — update cadence-gate reference and clear decay flag.
+            flash_decay_active = false;
+            flash_decay_time_s = 0.0f;
+            const UWorld* World = GetWorld();
+            time_last_flash_zero_s = World ? World->GetTimeSeconds() : 0.0f;
+        }
     }
 }
 
@@ -915,10 +968,42 @@ void UPlayerLaneMovementComponent::TriggerEdgeAbsorb(EPlayerLane FromLane, ESlip
 
 void UPlayerLaneMovementComponent::TriggerCommitmentTell(EPlayerLane TargetLane)
 {
-    // TODO(Story 010): use TargetLane to select mesh face for the commitment flash:
-    // +X face for a rightward slip (TargetLane ordinal > current_lane ordinal at call time),
-    // -X face for a leftward slip (TargetLane ordinal < current_lane ordinal at call time).
-    // Increment commitment_tell_fire_count and enforce cadence cap.
+    // Story 010: commitment-tell 80% flash + 200ms cadence cap. TR-PM-013/014/015.
+
+    // AC-COMMIT-FLASH-CADENCE Setup A: counter ALWAYS increments — cadence cap
+    // gates the visual only, not the counter. Increment BEFORE the cadence gate.
+    ++commitment_tell_fire_count;
+
+    // Cadence gate: suppress visual if within 200ms window from prior fade-to-zero.
+    const UWorld* World = GetWorld();
+    const float now_s = World ? World->GetTimeSeconds() : 0.0f;
+    const float window_s = COMMIT_FLASH_CADENCE_MS * 0.001f;
+    if (now_s - time_last_flash_zero_s < window_s)
+    {
+        return; // Visual suppressed — counter already incremented above.
+    }
+
+    // Direction sign: rightward slip (TargetLane index > current_lane index) → +1;
+    // leftward → -1. Multiplied by COMMIT_FLASH_AMPLITUDE (±0.80) at write time.
+    sign_of_current_flash =
+        (static_cast<int32>(TargetLane) > static_cast<int32>(current_lane)) ? +1.0f : -1.0f;
+
+    // Peak flash write — Art Bible authors LeadingFaceFlash as a scalar param
+    // on the mesh material slot 0. Null-guard covers headless tests + missing MID.
+    if (IsValid(MeshMaterialDynamic))
+    {
+        MeshMaterialDynamic->SetScalarParameterValue(
+            TEXT("LeadingFaceFlash"),
+            sign_of_current_flash * COMMIT_FLASH_AMPLITUDE);
+#if WITH_DEV_AUTOMATION_TESTS
+        ++CommitmentTellFlashWrite_TestOnlyCallCount;
+#endif
+    }
+
+    // Schedule 2-frame hold + 50ms decay lifecycle (advanced per-tick in TickComponent).
+    flash_hold_ticks_remaining = 2;
+    flash_decay_active = false;
+    flash_decay_time_s = 0.0f;
 }
 
 // ---------------------------------------------------------------------------
@@ -1188,6 +1273,24 @@ void UPlayerLaneMovementComponent::SnapToTargetAndReset()
     f6_override_fadeout_snapshot_body   = 0.0f;
     f6_override_fadeout_snapshot_head   = 0.0f;
     f6_override_fadeout_snapshot_arm    = 0.0f;
+
+    // 8. Reset Story 010 commitment-tell flash lifecycle state.
+    // Story 008 already resets commitment_tell_fire_count on COUNTDOWN separately in
+    // HandleStateChanged — this hook resets ONLY the flash lifecycle state (fields owned
+    // by Story 010) so the next run's first commitment-tell writes cleanly.
+    flash_hold_ticks_remaining = 0;
+    flash_decay_active         = false;
+    flash_decay_time_s         = 0.0f;
+    sign_of_current_flash      = 0.0f;
+    time_last_flash_zero_s     = -1000.0f; // Reset to sentinel so next run's first fire always renders.
+    if (IsValid(MeshMaterialDynamic))
+    {
+        // Zero the material param so any lingering flash is cleared on reset.
+        MeshMaterialDynamic->SetScalarParameterValue(TEXT("LeadingFaceFlash"), 0.0f);
+#if WITH_DEV_AUTOMATION_TESTS
+        ++CommitmentTellFlashWrite_TestOnlyCallCount;
+#endif
+    }
 }
 
 // ---------------------------------------------------------------------------
