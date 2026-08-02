@@ -352,6 +352,15 @@ public:
      *  SnapToTargetAndReset, DiscardBuffer) for Story 008 integration tests
      *  (AC-14 through AC-SS-B). Story 008. */
     friend class FPMTerminalStatesTest;
+
+    /** Grants FPMPauseGraceTest direct access to private state fields
+     *  (movement_state, current_lane, target_lane, tween_progress, has_queued_input,
+     *  queued_input_direction, slip_complete_count, edge_absorb_trigger_count,
+     *  commitment_tell_fire_count, edge_absorb_active, edge_absorb_progress,
+     *  edge_absorb_local_timer_s, edge_absorb_sign, HandlePausedChanged,
+     *  HandlePausedChanged_TestOnlyCallCount) for Story 009 integration tests
+     *  (AC-11/12/13/24/COUNTER-PAUSE-RESUME). Story 009. */
+    friend class FPMPauseGraceTest;
 #endif // WITH_DEV_AUTOMATION_TESTS
 
 private:
@@ -402,6 +411,10 @@ private:
      *  Read via FPMInputBufferTest friend to verify synchronous dispatch (AC-25).
      *  Story 005. Non-const write from PlayBufferDropAudioSting — no mutable needed. */
     int32 BufferDropAudioSting_TestOnlyCallCount = 0;
+
+    /** Test-only: increments once per HandlePausedChanged invocation.
+     *  Read via FPMPauseGraceTest friend for logging-only body verification. Story 009. */
+    int32 HandlePausedChanged_TestOnlyCallCount = 0;
 #endif // WITH_DEV_AUTOMATION_TESTS
 
     // -----------------------------------------------------------------------

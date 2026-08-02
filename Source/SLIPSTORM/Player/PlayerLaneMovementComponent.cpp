@@ -489,13 +489,24 @@ void UPlayerLaneMovementComponent::HandleStateChanged(
     }
 }
 
-void UPlayerLaneMovementComponent::HandlePausedChanged(
-    bool bIsPaused,
-    double Timestamp)
+void UPlayerLaneMovementComponent::HandlePausedChanged(bool bIsPaused, double Timestamp)
 {
-    // TODO(Story 009): implement pause freeze / resume-grace integration.
-    (void)bIsPaused;
+    // Story 009: logging-only body. Pause freeze is REALIZED by TickComponent's
+    // Rule 5 gate reading RSMSubsystem->IsPaused() / IsResumeGrace() per tick
+    // (Story 003 site at cpp:209-215). Buffer is PRESERVED across pause per
+    // Rule 6 — deliberately NOT calling DiscardBuffer() here (contrasts with
+    // Story 008's terminal-state handlers which DO discard).
+    //
+    // Story 013 watchdog may consume Timestamp for pause-window telemetry.
     (void)Timestamp;
+
+#if WITH_DEV_AUTOMATION_TESTS
+    ++HandlePausedChanged_TestOnlyCallCount;
+#endif
+
+    UE_LOG(LogPlayerMovement, Verbose,
+           TEXT("PlayerLaneMovementComponent::HandlePausedChanged(bIsPaused=%s)"),
+           bIsPaused ? TEXT("true") : TEXT("false"));
 }
 
 // ---------------------------------------------------------------------------
