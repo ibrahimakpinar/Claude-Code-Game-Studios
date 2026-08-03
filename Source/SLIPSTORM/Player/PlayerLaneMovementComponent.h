@@ -18,6 +18,7 @@
 // Story: production/epics/player-movement/story-005-input-buffer.md
 // Story: production/epics/player-movement/story-007-f6-edge-absorb.md
 // Story: production/epics/player-movement/story-008-terminal-state-handlers.md
+// Story: production/epics/player-movement/story-011-slip-audio-cue-ducking.md
 
 #pragma once
 
@@ -367,6 +368,13 @@ public:
      *  for cadence cap, counter, sign, and null-guarded write path tests. Story 010. */
     friend class FPMCommitmentTellTest;
 
+    /** Grants FPMAudioCueTest direct access to slip cue lifecycle + envelope state
+     *  (audio_cue_ratio, slip_cue_active, slip_cue_remaining_s, envelope_phase,
+     *  envelope_elapsed_s, PlaySlipAudioCue, EngageDuckIfSlipActive,
+     *  test counters) for AC-AUDIO-CUE-PROPORTIONALITY, Setup A/B/C,
+     *  EC-16 triple-overlap, center-pan, HARD-CUT ramp, rate-clamp tests. Story 011. */
+    friend class FPMAudioCueTest;
+
     /** Test-only: increments once per LeadingFaceFlash SetScalarParameterValue call.
      *  Verifies cadence cap suppression by counting actual material writes vs
      *  the always-incrementing commitment_tell_fire_count. Story 010. */
@@ -425,6 +433,18 @@ private:
     /** Test-only: increments once per HandlePausedChanged invocation.
      *  Read via FPMPauseGraceTest friend for logging-only body verification. Story 009. */
     int32 HandlePausedChanged_TestOnlyCallCount = 0;
+
+    /** Test-only: increments once per PlaySlipAudioCue invocation. Story 011. */
+    int32 PlaySlipAudioCue_TestOnlyCallCount = 0;
+
+    /** Test-only: duration passed on the most recent PlaySlipAudioCue call (seconds).
+     *  Sentinel -1.0f before any dispatch. Story 011. */
+    float PlaySlipAudioCue_TestOnlyLastDurationS = -1.0f;
+
+    /** Test-only: pan value dispatched on the most recent PlaySlipAudioCue call.
+     *  Center-pan invariant (R11a-14): always 0.0f. Sentinel -999.0f before any
+     *  dispatch. Story 011. */
+    float PlaySlipAudioCue_TestOnlyLastPan = -999.0f;
 #endif // WITH_DEV_AUTOMATION_TESTS
 
     // -----------------------------------------------------------------------
@@ -552,8 +572,29 @@ private:
      *  Fires synchronously within the same HandleSlipTransition event call (AC-25).
      *  The audio system owns the actual cue; this method fires the dispatch.
      *  Current stub body: UE_LOG at Verbose.  Audio routing is downstream.
-     *  Story 005. */
+     *  Story 011 EC-16 extension: if slip cue is active at dispatch time, engages
+     *  HARD-CUT ramp (≤5ms linear to silence) on the slip cue before the buffer-drop
+     *  proceeds. Buffer-drop plays at full authored level; slip cue is suppressed.
+     *  Story 005; extended Story 011. */
     void PlayBufferDropAudioSting();
+
+    /** Presentation dispatch for the slip audio cue (SETTLED→SLIPPING trigger).
+     *  Called from HandleSlipTransition after TriggerCommitmentTell. Computes
+     *  duration = clamp(audio_cue_ratio, 0.89, 1.12) * clamp(SLIP_TWEEN_DURATION_S,
+     *  0.10, 0.15); dispatches at center-pan (R11a-14); sets slip_cue_active and
+     *  slip_cue_remaining_s for envelope tracking.
+     *  Current stub body: UE_LOG at Verbose + test counters. Audio routing is
+     *  downstream (audio-programmer scope, out of PM epic).
+     *  Story 011; TR-PM-031. */
+    void PlaySlipAudioCue(EPlayerLane From, EPlayerLane To);
+
+    /** Engage the -6dB duck envelope on the slip cue IF a slip cue is currently
+     *  active. No-op when slip_cue_active is false. Sets envelope_phase =
+     *  DUCK_ATTACK and resets envelope_elapsed_s to 0. Called from Story 012's
+     *  PlayNearMissAudioSwell dispatch (safe range: only exercised when near-miss
+     *  overlaps active slip cue, per Setup A).
+     *  Story 011; TR-PM-032. */
+    void EngageDuckIfSlipActive();
 
     // -----------------------------------------------------------------------
     // Story 004 — F-3 lateral interpolation
@@ -693,6 +734,86 @@ private:
      *  COMMIT_FLASH_CADENCE_MS/1000. Initialised to -1000.0f so the first fire
      *  always passes the cadence gate. Story 010. */
     float time_last_flash_zero_s = -1000.0f;
+
+    // -----------------------------------------------------------------------
+    // Story 011 — slip audio cue + duck + HARD-CUT tuning constants
+    // TR-PM-031 (slip cue duration); TR-PM-032 (-6dB duck + HARD-CUT).
+    // -----------------------------------------------------------------------
+
+    /** Default audio_cue_ratio (0.93) — slip cue duration multiplier applied to
+     *  SLIP_TWEEN_DURATION_S. Safe [0.89, 1.12] per R11a-13; enforced by clamp
+     *  in PlaySlipAudioCue. Rate-transposition invariant (F-AUDIO-CUE-IDENTITY):
+     *  rate = 1/ratio bounded to ±2 semitones (1/1.12 ≈ 0.893 = -1.96 st;
+     *  1/0.89 ≈ 1.124 = +2.02 st). Story 011. */
+    static constexpr float SLIP_AUDIO_CUE_RATIO_DEFAULT = 0.93f;
+    static constexpr float SLIP_AUDIO_CUE_RATIO_MIN     = 0.89f;
+    static constexpr float SLIP_AUDIO_CUE_RATIO_MAX     = 1.12f;
+
+    /** Duck depth (-6dB) applied to the slip cue when a near-miss swell overlaps.
+     *  Linear gain scalar = 10^(-6/20) ≈ 0.501187. Story 011 TR-PM-032. */
+    static constexpr float DUCK_DEPTH_DB     = -6.0f;
+    static constexpr float DUCK_GAIN_LINEAR  = 0.5011872336f;
+
+    /** Duck envelope timings (seconds). Attack = 50ms linear from authored to
+     *  authored − 6dB; release = 100ms linear back (unexercised in safe range
+     *  per Setup C). Story 011. */
+    static constexpr float DUCK_ATTACK_S     = 0.050f;
+    static constexpr float DUCK_RELEASE_S    = 0.100f;
+
+    /** HARD-CUT linear ramp duration (seconds). ≤5ms per R11a-15. Placeholder
+     *  linear shape; raised-cosine upgrade pending R12a DR-PRES-RAMP audio-director
+     *  decision (polish-phase swap, not a blocker). Story 011. */
+    static constexpr float HARD_CUT_RAMP_S   = 0.005f;
+
+    /** Compile-time safe-range guard: slip cue max duration MUST end before
+     *  near-miss min onset, otherwise Setup C ("release envelope unverifiable")
+     *  becomes false and the duck-release envelope must be implemented.
+     *  Formula: SLIP_TWEEN_MAX (0.15) * RATIO_MAX (1.12) = 168ms < 200ms
+     *  near-miss min onset (presentation §5 safe-range analysis).
+     *  Future tuning that violates this fails to compile. Story 011 advisor guidance. */
+    static_assert(0.15f * SLIP_AUDIO_CUE_RATIO_MAX < 0.200f,
+        "Story 011: slip cue max duration must remain below near-miss min-onset "
+        "(200ms) per Setup C safe-range analysis. If SLIP_TWEEN_DURATION_S max or "
+        "SLIP_AUDIO_CUE_RATIO_MAX has increased, implement the duck-release envelope "
+        "and update AC-AUDIO-CUE-DUCKING Setup C.");
+
+    // -----------------------------------------------------------------------
+    // Story 011 — envelope state machine
+    // -----------------------------------------------------------------------
+
+    /** Envelope phase for the slip cue's gain automation. Story 011.
+     *   NONE           — no envelope active (default; slip cue at authored level).
+     *   DUCK_ATTACK    — 50ms linear ramp from authored to authored − 6dB (near-miss dispatch).
+     *   DUCK_SUSTAINED — hold at authored − 6dB until slip cue ends.
+     *   HARD_CUT       — ≤5ms linear ramp to silence (buffer-drop dispatch, EC-16). */
+    enum class ESlipAudioEnvelopePhase : uint8
+    {
+        NONE            = 0,
+        DUCK_ATTACK     = 1,
+        DUCK_SUSTAINED  = 2,
+        HARD_CUT        = 3
+    };
+
+    /** True while the slip cue is dispatched and its lifetime timer is running. */
+    bool slip_cue_active = false;
+
+    /** Remaining lifetime of the current slip cue (seconds). Decremented per-tick
+     *  in the SLIPPING branch. When it reaches 0 (or HARD-CUT completes),
+     *  slip_cue_active is cleared. */
+    float slip_cue_remaining_s = 0.0f;
+
+    /** Current envelope phase (see ESlipAudioEnvelopePhase). */
+    ESlipAudioEnvelopePhase envelope_phase = ESlipAudioEnvelopePhase::NONE;
+
+    /** Elapsed time within the current envelope phase (seconds). Resets to 0
+     *  when a new phase is entered. Used to compute linear ramp progress. */
+    float envelope_elapsed_s = 0.0f;
+
+    /** Slip audio cue duration multiplier applied to SLIP_TWEEN_DURATION_S.
+     *  Design default 0.93 per R11a-13; safe [0.89, 1.12].
+     *  Tunable in the Blueprint default. Story 011; TR-PM-031. */
+    UPROPERTY(EditDefaultsOnly, Category="SLIPSTORM|Movement|Tuning")
+    float audio_cue_ratio = SLIP_AUDIO_CUE_RATIO_DEFAULT;
 
     /** F-5 body/head/arm lean computation.
      *  Reads LeanCurve at three staggered progress offsets: TP (body), TP-HEAD_LAG (head),

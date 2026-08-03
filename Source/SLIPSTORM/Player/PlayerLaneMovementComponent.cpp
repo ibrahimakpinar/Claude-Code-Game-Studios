@@ -31,6 +31,11 @@
 //   TR-PM-015 (monotonic counters), TR-PM-016 (reset on COUNTDOWN), TR-PM-017 (DEAD freeze),
 //   TR-PM-018 (COMPLETE/ABORTED snap). Non-callback invariant: ADR-0007 SD2.
 // Story 009 scope: HandlePausedChanged body. (deferred)
+// Story 011 scope: PlaySlipAudioCue dispatch (TR-PM-031 duration = ratio × SLIP_TWEEN,
+//   center-pan R11a-14, rate-transposition ±2 semitones via ratio clamp),
+//   EngageDuckIfSlipActive hook (Story 012 near-miss caller), PlayBufferDropAudioSting
+//   EC-16 extension (HARD-CUT ramp when slip cue active), envelope phase advance
+//   inside Rule 5 SLIPPING branch. TR-PM-031 (duration); TR-PM-032 (-6dB duck + HARD-CUT).
 // Watchdog buffer advance by Story 013.
 
 #include "Player/PlayerLaneMovementComponent.h"
@@ -385,6 +390,65 @@ void UPlayerLaneMovementComponent::TickComponent(
             time_last_flash_zero_s = World ? World->GetTimeSeconds() : 0.0f;
         }
     }
+
+    // Story 011: slip audio cue lifetime + envelope phase advance.
+    // Runs INSIDE the Rule 5 RUNNING gate — envelope only advances during active
+    // gameplay, never during pause/grace/non-RUNNING states.
+    //
+    // Safe-range invariant (Setup C, static_assert-guarded in .h): slip cue max
+    // duration (168ms) < near-miss min onset (200ms), so the slip cue always
+    // ends within its dispatching SLIPPING state; envelope advance in this
+    // Rule-5-gated block covers the full cue lifetime. If future tuning breaks
+    // this invariant the static_assert fails to compile — force a redesign
+    // rather than allow silent envelope leaks into SETTLED.
+    if (slip_cue_active)
+    {
+        slip_cue_remaining_s -= effective_dt;
+        envelope_elapsed_s   += effective_dt;
+
+        // Phase transitions.
+        switch (envelope_phase)
+        {
+            case ESlipAudioEnvelopePhase::NONE:
+                // No envelope automation — cue plays at authored level until
+                // slip_cue_remaining_s reaches 0.
+                break;
+
+            case ESlipAudioEnvelopePhase::DUCK_ATTACK:
+                if (envelope_elapsed_s >= DUCK_ATTACK_S)
+                {
+                    envelope_phase     = ESlipAudioEnvelopePhase::DUCK_SUSTAINED;
+                    envelope_elapsed_s = 0.0f;
+                }
+                break;
+
+            case ESlipAudioEnvelopePhase::DUCK_SUSTAINED:
+                // Hold at authored − 6dB until the cue naturally ends (Setup A).
+                // Setup C: release envelope is vacuous in safe range, so no
+                // DUCK_RELEASE phase is entered here.
+                break;
+
+            case ESlipAudioEnvelopePhase::HARD_CUT:
+                if (envelope_elapsed_s >= HARD_CUT_RAMP_S)
+                {
+                    // Ramp complete — cue is silent; end lifetime immediately.
+                    slip_cue_active      = false;
+                    slip_cue_remaining_s = 0.0f;
+                    envelope_phase       = ESlipAudioEnvelopePhase::NONE;
+                    envelope_elapsed_s   = 0.0f;
+                }
+                break;
+        }
+
+        // Lifetime expiry (only if HARD-CUT didn't already end the cue this tick).
+        if (slip_cue_active && slip_cue_remaining_s <= 0.0f)
+        {
+            slip_cue_active      = false;
+            slip_cue_remaining_s = 0.0f;
+            envelope_phase       = ESlipAudioEnvelopePhase::NONE;
+            envelope_elapsed_s   = 0.0f;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -676,6 +740,14 @@ void UPlayerLaneMovementComponent::HandleSlipTransition(ESlipDirection Dir)
     // Commitment-tell hook — Story 010 stub. TargetLane passed so Story 010 can
     // determine slip direction sign for mesh-face selection.
     TriggerCommitmentTell(target_lane);
+
+    // Slip audio cue dispatch — Story 011. Fires on every SETTLED→SLIPPING
+    // transition, immediately after TriggerCommitmentTell so audio + visual
+    // commitment feedback are synchronous. current_lane is the source lane
+    // (retained through SLIPPING per source-lane semantic); target_lane is
+    // the destination. Duration + envelope state set inside PlaySlipAudioCue.
+    // TR-PM-031.
+    PlaySlipAudioCue(current_lane, target_lane);
 }
 
 // ---------------------------------------------------------------------------
@@ -925,6 +997,17 @@ void UPlayerLaneMovementComponent::DiscardBuffer()
 
 void UPlayerLaneMovementComponent::PlayBufferDropAudioSting()
 {
+    // Story 011 EC-16 triple-overlap resolution: buffer-drop always plays full.
+    // If a slip cue is currently active, suppress it via HARD-CUT ramp (≤5ms
+    // linear placeholder; raised-cosine pending R12a DR-PRES-RAMP). This runs
+    // BEFORE the buffer-drop dispatch log so the HARD-CUT engagement is
+    // synchronous with the buffer-drop event.
+    if (slip_cue_active)
+    {
+        envelope_phase     = ESlipAudioEnvelopePhase::HARD_CUT;
+        envelope_elapsed_s = 0.0f;
+    }
+
     // Story 005 presentation dispatch — stub. The audio system owns the actual cue;
     // this method just fires the dispatch. Wiring to the audio subsystem is
     // downstream (audio-designer / audio-programmer scope, out of PM epic).
@@ -934,6 +1017,73 @@ void UPlayerLaneMovementComponent::PlayBufferDropAudioSting()
     // Test hook — AC-25 synchronous-dispatch verification.
     ++BufferDropAudioSting_TestOnlyCallCount;
 #endif
+}
+
+void UPlayerLaneMovementComponent::PlaySlipAudioCue(EPlayerLane From, EPlayerLane To)
+{
+    // Story 011 presentation dispatch — stub. Called from HandleSlipTransition
+    // after TriggerCommitmentTell on SETTLED→SLIPPING. The audio system owns
+    // the actual cue; this method fires the dispatch + sets envelope state.
+    // Wiring to the audio subsystem is downstream (audio-programmer scope).
+    //
+    // Duration derivation per TR-PM-031 + AC-AUDIO-CUE-PROPORTIONALITY:
+    //   duration = clamp(audio_cue_ratio, 0.89, 1.12)
+    //            * clamp(SLIP_TWEEN_DURATION_S, 0.10, 0.15)
+    // The ratio clamp doubles as the rate-transposition guard (F-AUDIO-CUE-IDENTITY):
+    // playback rate = 1/ratio is bounded to ±2 semitones via the [0.89, 1.12] range.
+
+    const float clamped_ratio = FMath::Clamp(audio_cue_ratio,
+                                             SLIP_AUDIO_CUE_RATIO_MIN,
+                                             SLIP_AUDIO_CUE_RATIO_MAX);
+    const float clamped_tween = FMath::Clamp(SLIP_TWEEN_DURATION_S, 0.10f, 0.15f);
+    const float duration_s    = clamped_ratio * clamped_tween;
+
+    // Center-pan invariant per R11a-14: PM never dispatches a panned variant.
+    // Single-variant cue asset only; if the cue asset exposes a pan parameter,
+    // PM writes 0.0f. Recorded here for test verification.
+    constexpr float pan = 0.0f;
+
+    // Reset envelope + slip cue lifetime state. Any prior duck/HARD-CUT state
+    // from a previous cue is discarded — this call re-arms the envelope for the
+    // new dispatch.
+    slip_cue_active      = true;
+    slip_cue_remaining_s = duration_s;
+    envelope_phase       = ESlipAudioEnvelopePhase::NONE;
+    envelope_elapsed_s   = 0.0f;
+
+    UE_LOG(LogPlayerMovement, Verbose,
+        TEXT("PlaySlipAudioCue fired: From=%d To=%d duration=%.4fs pan=%.2f"),
+        static_cast<int32>(From), static_cast<int32>(To), duration_s, pan);
+
+#if WITH_DEV_AUTOMATION_TESTS
+    // Test hooks — AC-AUDIO-CUE-PROPORTIONALITY (duration), R11a-14 (pan==0), counter.
+    ++PlaySlipAudioCue_TestOnlyCallCount;
+    PlaySlipAudioCue_TestOnlyLastDurationS = duration_s;
+    PlaySlipAudioCue_TestOnlyLastPan       = pan;
+#endif
+}
+
+void UPlayerLaneMovementComponent::EngageDuckIfSlipActive()
+{
+    // Story 011 duck-engagement hook. Called from Story 012's
+    // PlayNearMissAudioSwell dispatch. Guarded — no-op unless slip cue is
+    // currently active (AC-AUDIO-CUE-DUCKING Setup B vacuous case).
+    //
+    // Precedence: if envelope is already in HARD_CUT, do NOT overwrite —
+    // EC-16 rule says slip cue is being force-ended by buffer-drop; a
+    // concurrent near-miss must not restore/duck a cue that is about to
+    // be silent.
+    if (!slip_cue_active)
+    {
+        return;
+    }
+    if (envelope_phase == ESlipAudioEnvelopePhase::HARD_CUT)
+    {
+        return;
+    }
+
+    envelope_phase     = ESlipAudioEnvelopePhase::DUCK_ATTACK;
+    envelope_elapsed_s = 0.0f;
 }
 
 void UPlayerLaneMovementComponent::TriggerEdgeAbsorb(EPlayerLane FromLane, ESlipDirection Dir)
@@ -1291,6 +1441,18 @@ void UPlayerLaneMovementComponent::SnapToTargetAndReset()
         ++CommitmentTellFlashWrite_TestOnlyCallCount;
 #endif
     }
+
+    // 9. Reset Story 011 slip audio cue lifetime + envelope state.
+    // Prevents a slip cue that was active at COMPLETE/ABORTED/COUNTDOWN entry
+    // from surviving the reset as a phantom "active" cue that would re-engage
+    // ducking on the next Story 012 near-miss dispatch. Currently harmless while
+    // the dispatch path is a UE_LOG stub, but load-bearing once the real audio
+    // bus is wired downstream (audio-programmer scope). Mirrors Story 010
+    // item 8 pattern for lifecycle-state ownership.
+    slip_cue_active      = false;
+    slip_cue_remaining_s = 0.0f;
+    envelope_phase       = ESlipAudioEnvelopePhase::NONE;
+    envelope_elapsed_s   = 0.0f;
 }
 
 // ---------------------------------------------------------------------------
