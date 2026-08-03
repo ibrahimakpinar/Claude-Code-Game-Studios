@@ -52,7 +52,7 @@ enum class EHapticEvent : uint8
     // compiler-visible — a future inserted enum value cannot silently shift
     // BufferDrop without triggering an editor/reflection-side diff.
     BufferDrop = 0 UMETA(DisplayName = "Buffer Drop"),
-    // NearMiss     — added by Story 012 (near-miss-beat); reserved ordinal 1
+    NearMiss   = 1 UMETA(DisplayName = "Near Miss"),
     // SlipConfirmed — out-of-epic slip-confirmation story; reserved ordinal 2
 };
 

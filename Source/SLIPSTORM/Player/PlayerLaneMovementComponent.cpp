@@ -36,6 +36,13 @@
 //   EngageDuckIfSlipActive hook (Story 012 near-miss caller), PlayBufferDropAudioSting
 //   EC-16 extension (HARD-CUT ramp when slip cue active), envelope phase advance
 //   inside Rule 5 SLIPPING branch. TR-PM-031 (duration); TR-PM-032 (-6dB duck + HARD-CUT).
+// Story 012 scope: TriggerNearMissBeat public API (Pull-Wave caller), Y-dip lifecycle
+//   (33ms attack + 80ms return, mesh Z-offset), PlayNearMissAudioSwell dispatch
+//   (invokes EngageDuckIfSlipActive bidirectional integration), AND-gated haptic
+//   dispatch (IsSystemHapticsEnabled AND IsNearMissHapticEnabled per B-CERT-2 +
+//   R11a-12 accessibility opt-in), unified mesh SetRelativeLocation hoist (X from
+//   F-3, Z from Y-dip; mirrors Story 007 state-agnostic rotation co-write precedent).
+//   TR-PM-030 (near-miss haptic AND-gated dispatch).
 // Watchdog buffer advance by Story 013.
 
 #include "Player/PlayerLaneMovementComponent.h"
@@ -46,6 +53,7 @@
 #include "Engine/GameInstance.h"
 #include "Misc/App.h"  // FApp::GetDeltaTime() — F-PROLOGUE (Story 002)
 #include "Seam/IHapticDispatch.h"             // ADR-0002 INT-002-amended haptic bridge — Story 005
+#include "Seam/IGameSettings.h"               // Accessibility settings seam (IsNearMissHapticEnabled) — Story 012
 #include "Seam/PlayerMovementProvider.h"      // EMovementState (plain enum class) — Story 008 AC-SS-B
 #include "Materials/MaterialInstanceDynamic.h"  // Story 010: commitment-tell flash write
 
@@ -235,7 +243,13 @@ void UPlayerLaneMovementComponent::TickComponent(
         return; // mechanics skipped; TweenProgress NOT advanced; buffered input NOT flushed
     }
 
-    // F-2 advance — only while SLIPPING.
+    // F-2 advance — only while SLIPPING. F-3 relative-X computed here for the
+    // unified mesh write below; lateral_world_position updated per state.
+    // Story 012 hoist: the mesh SetRelativeLocation call moved out of this branch
+    // to a unified write after both branches, so Y-dip Z-offset composes with F-3 X
+    // during SLIPPING AND applies alone during SETTLED. Mirrors Story 007's
+    // state-agnostic F-5+F-6 rotation co-write precedent.
+    float rel_x = 0.0f;
     if (movement_state == ERunSlipState::SLIPPING)
     {
         const float prev_tp = tween_progress;
@@ -246,22 +260,21 @@ void UPlayerLaneMovementComponent::TickComponent(
         // Does NOT fire on edge-absorb (Story 007), pause/resume, or completed tweens.
         //
         // ORDERING NOTE (Story 004): lateral_world_position reflects the PREVIOUS
-        // tick's value during this broadcast — the F-3 write below (~line 218)
-        // runs after the broadcast. Subscribers that need the current-tick mesh
-        // position must read F3RelativeOffset directly or defer to a post-tick
-        // delegate. Current consumers (Camera, Pull-Wave) read lateral_world_position
-        // out-of-band per their own tick, not from this callback.
+        // tick's value during this broadcast — the F-3 compute below runs after
+        // the broadcast. Subscribers that need the current-tick mesh position must
+        // read F3RelativeOffset directly or defer to a post-tick delegate. Current
+        // consumers (Camera, Pull-Wave) read lateral_world_position out-of-band per
+        // their own tick, not from this callback.
         if (prev_tp < 0.5f && tween_progress >= 0.5f)
         {
             OnSlipMidpoint.Broadcast(/*FromLane=*/current_lane, /*ToLane=*/target_lane);
         }
 
-        // F-3: write mesh relative position + update public lateral_world_position.
+        // F-3: compute mesh relative X + update public lateral_world_position.
         // IG-5: no absolute-position clamp — the relative form lands at 0 naturally at TP=1.0.
         if (CachedMeshComponent)
         {
-            const float rel_x = F3RelativeOffset(tween_progress);
-            CachedMeshComponent->SetRelativeLocation(FVector(rel_x, 0.0f, 0.0f));
+            rel_x = F3RelativeOffset(tween_progress);
             lateral_world_position = GetOwner()->GetActorLocation().X + rel_x;
         }
         if (tween_progress >= 1.0f)
@@ -273,7 +286,50 @@ void UPlayerLaneMovementComponent::TickComponent(
     {
         // AC: lateral_world_position returns LaneWorldX(current_lane) when SETTLED.
         // Keeps the property fresh for Camera and Pull-Wave targeting consumers.
+        // rel_x remains 0.0f — mesh sits at lane center in relative-space.
         lateral_world_position = LaneWorldX(current_lane);
+    }
+
+    // Story 012: Y-dip lifecycle advance (Phase 1 attack 33ms + Phase 2 return
+    // 80ms + Phase 3 clear). Runs BEFORE the unified mesh write below so that
+    // this tick's mesh Z reflects this tick's Y-dip offset (current-tick
+    // responsiveness; avoids one-frame render latency and post-Phase-3 residual).
+    if (y_dip_active)
+    {
+        y_dip_time_s += effective_dt;
+
+        if (y_dip_time_s <= Y_DIP_ATTACK_S)
+        {
+            // Phase 1: linear ramp 0 → -Y_DIP_PEAK_CM over 33ms.
+            y_dip_offset_cm = -Y_DIP_PEAK_CM * (y_dip_time_s / Y_DIP_ATTACK_S);
+        }
+        else if (y_dip_time_s <= Y_DIP_ATTACK_S + Y_DIP_RETURN_S)
+        {
+            // Phase 2: linear return -Y_DIP_PEAK_CM → 0 over 80ms.
+            const float return_t = (y_dip_time_s - Y_DIP_ATTACK_S) / Y_DIP_RETURN_S;
+            y_dip_offset_cm = -Y_DIP_PEAK_CM * (1.0f - return_t);
+        }
+        else
+        {
+            // Phase 3: window elapsed — clear lifecycle. y_dip_offset_cm is
+            // zeroed explicitly so the next unified mesh write on the SAME tick
+            // renders the neutral position (no residual sub-mm drift).
+            y_dip_active    = false;
+            y_dip_time_s    = 0.0f;
+            y_dip_offset_cm = 0.0f;
+        }
+    }
+
+    // Story 012: unified mesh SetRelativeLocation write — X from F-3 (SLIPPING) or
+    // 0 (SETTLED); Z from Y-dip lifecycle (advanced immediately above this write).
+    // Fires every Rule-5-gated tick regardless of movement_state so the Y-dip
+    // renders during SETTLED as well as SLIPPING (AC-1 "Additive to F-3/F-5/F-6
+    // outputs — write to mesh's Z relative location independently of X"). The
+    // SETTLED-with-nothing-active case writes (0, 0, 0) — negligible cost, no
+    // Chaos physics (component transform update only).
+    if (CachedMeshComponent)
+    {
+        CachedMeshComponent->SetRelativeLocation(FVector(rel_x, 0.0f, y_dip_offset_cm));
     }
 
     // F-6 tick advance — runs OUTSIDE the SLIPPING/SETTLED branches so the
@@ -1086,6 +1142,73 @@ void UPlayerLaneMovementComponent::EngageDuckIfSlipActive()
     envelope_elapsed_s = 0.0f;
 }
 
+void UPlayerLaneMovementComponent::TriggerNearMissBeat()
+{
+    // Story 012 public API — called by Pull-Wave's Rule 11 near-miss detector
+    // (out-of-epic caller). Fires 3 presentation channels synchronously:
+    //   (a) avatar Y-dip animation via lifecycle state machine (mesh Z-offset;
+    //       advanced in TickComponent inside Rule 5 gate);
+    //   (b) audio swell via PlayNearMissAudioSwell — which ALSO invokes
+    //       EngageDuckIfSlipActive so a concurrent slip cue is ducked
+    //       (Story 011 bidirectional integration, safe-range Setup A);
+    //   (c) haptic dispatch AND-gated by IHapticDispatch::IsSystemHapticsEnabled()
+    //       (OS-state cert compliance per B-CERT-2 — respects iOS Focus / Android
+    //       DND) AND IGameSettings::IsNearMissHapticEnabled() (R11a-12
+    //       accessibility opt-in, default OFF; player toggles in future
+    //       Accessibility Settings UI).
+    //
+    // NOTE: TriggerNearMissBeat is not Rule-5-gated at the call site — Pull-Wave
+    // calls it whenever Rule 11 fires. The Y-dip lifecycle advance IS Rule-5-gated
+    // (inside TickComponent), so if the RSM is paused when this method fires, the
+    // Y-dip is set active but does not advance until RUNNING resumes. Audio +
+    // haptic dispatch always fires immediately — matches PlayBufferDropAudioSting
+    // synchronous-dispatch precedent (Story 005 AC-25).
+
+    // (a) Start Y-dip animation — restart (not additive) if already running.
+    y_dip_active = true;
+    y_dip_time_s = 0.0f;
+
+    // (b) Audio swell dispatch (also triggers duck-if-slip-active).
+    PlayNearMissAudioSwell();
+
+    // (c) Haptic dispatch — AND-gated per B-CERT-2 + R11a-12.
+    // Short-circuit evaluation means IsNearMissHapticEnabled() is not called
+    // when system haptics are disabled — no unnecessary settings-lookup cost.
+    if (IHapticDispatch::IsSystemHapticsEnabled()
+        && IGameSettings::IsNearMissHapticEnabled())
+    {
+        IHapticDispatch::Fire(EHapticEvent::NearMiss);
+    }
+
+    UE_LOG(LogPlayerMovement, Verbose, TEXT("TriggerNearMissBeat fired"));
+
+#if WITH_DEV_AUTOMATION_TESTS
+    ++TriggerNearMissBeat_TestOnlyCallCount;
+#endif
+}
+
+void UPlayerLaneMovementComponent::PlayNearMissAudioSwell()
+{
+    // Story 012 presentation dispatch — stub. Called from TriggerNearMissBeat.
+    // The audio system owns the actual swell asset (600 Hz–1.6 kHz breath,
+    // 200–300ms, -6dB relative to slip cue authored level); this method fires
+    // the dispatch. Wiring to the audio subsystem is downstream (audio-programmer
+    // scope, out of PM epic).
+    //
+    // Bidirectional integration with Story 011: invoke EngageDuckIfSlipActive
+    // so a concurrent slip cue is ducked by -6dB (AC-AUDIO-CUE-DUCKING Setup A
+    // active-overlap). The hook is guarded (no-op if !slip_cue_active) so this
+    // call is safe when no slip is playing (Setup B vacuous case).
+
+    EngageDuckIfSlipActive();
+
+    UE_LOG(LogPlayerMovement, Verbose, TEXT("PlayNearMissAudioSwell fired"));
+
+#if WITH_DEV_AUTOMATION_TESTS
+    ++PlayNearMissAudioSwell_TestOnlyCallCount;
+#endif
+}
+
 void UPlayerLaneMovementComponent::TriggerEdgeAbsorb(EPlayerLane FromLane, ESlipDirection Dir)
 {
     // Story 007: F-6 edge-absorb activation. Called from HandleSlipTransition
@@ -1453,6 +1576,15 @@ void UPlayerLaneMovementComponent::SnapToTargetAndReset()
     slip_cue_remaining_s = 0.0f;
     envelope_phase       = ESlipAudioEnvelopePhase::NONE;
     envelope_elapsed_s   = 0.0f;
+
+    // 10. Reset Story 012 Y-dip lifecycle state.
+    // Prevents a Y-dip that was mid-animation at COMPLETE/ABORTED/COUNTDOWN
+    // entry from surviving the reset. Also zeros the mesh Z-offset so the
+    // next unified mesh write (post-reset) renders at neutral position rather
+    // than mid-dip. Mirrors items 8/9 lifecycle-state ownership precedent.
+    y_dip_active    = false;
+    y_dip_time_s    = 0.0f;
+    y_dip_offset_cm = 0.0f;
 }
 
 // ---------------------------------------------------------------------------

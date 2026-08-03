@@ -19,6 +19,7 @@
 // Story: production/epics/player-movement/story-007-f6-edge-absorb.md
 // Story: production/epics/player-movement/story-008-terminal-state-handlers.md
 // Story: production/epics/player-movement/story-011-slip-audio-cue-ducking.md
+// Story: production/epics/player-movement/story-012-near-miss-beat.md
 
 #pragma once
 
@@ -281,6 +282,15 @@ public:
      *  ADR-0009 SD5; GDD mechanics §3 Rule 2/4/5. */
     void HandleSlipTransition(ESlipDirection Dir);
 
+    /** Public API called by Pull-Wave's Rule 11 near-miss detector.
+     *  Fires (a) avatar Y-dip animation (mesh Z-offset dip 33ms attack + 80ms return),
+     *  (b) audio swell via PlayNearMissAudioSwell (which also engages the slip-cue
+     *  duck if a slip is active — see Story 011), (c) haptic dispatch AND-gated by
+     *  IHapticDispatch::IsSystemHapticsEnabled() (OS cert compliance) AND
+     *  IGameSettings::IsNearMissHapticEnabled() (R11a-12 accessibility opt-in,
+     *  default OFF). Story 012; TR-PM-030. */
+    void TriggerNearMissBeat();
+
     // -----------------------------------------------------------------------
     // Test access — Story 001a
     // -----------------------------------------------------------------------
@@ -375,6 +385,13 @@ public:
      *  EC-16 triple-overlap, center-pan, HARD-CUT ramp, rate-clamp tests. Story 011. */
     friend class FPMAudioCueTest;
 
+    /** Grants FPMNearMissTest direct access to Y-dip lifecycle state
+     *  (y_dip_active, y_dip_time_s, y_dip_offset_cm), TriggerNearMissBeat,
+     *  PlayNearMissAudioSwell, and test counters for AC-NEARMISS-HAPTIC
+     *  Setup A/B/C, OS-state cert, Y-dip lifecycle, Y-dip restart, additive
+     *  composition with F-3, and cross-story duck-hook tests. Story 012. */
+    friend class FPMNearMissTest;
+
     /** Test-only: increments once per LeadingFaceFlash SetScalarParameterValue call.
      *  Verifies cadence cap suppression by counting actual material writes vs
      *  the always-incrementing commitment_tell_fire_count. Story 010. */
@@ -445,6 +462,12 @@ private:
      *  Center-pan invariant (R11a-14): always 0.0f. Sentinel -999.0f before any
      *  dispatch. Story 011. */
     float PlaySlipAudioCue_TestOnlyLastPan = -999.0f;
+
+    /** Test-only: increments once per TriggerNearMissBeat invocation. Story 012. */
+    int32 TriggerNearMissBeat_TestOnlyCallCount = 0;
+
+    /** Test-only: increments once per PlayNearMissAudioSwell invocation. Story 012. */
+    int32 PlayNearMissAudioSwell_TestOnlyCallCount = 0;
 #endif // WITH_DEV_AUTOMATION_TESTS
 
     // -----------------------------------------------------------------------
@@ -595,6 +618,15 @@ private:
      *  overlaps active slip cue, per Setup A).
      *  Story 011; TR-PM-032. */
     void EngageDuckIfSlipActive();
+
+    /** Presentation dispatch for the near-miss audio swell (600 Hz–1.6 kHz
+     *  breath, 200–300ms, -6dB relative to slip cue). Called from TriggerNearMissBeat.
+     *  Bidirectional integration with Story 011: invokes EngageDuckIfSlipActive()
+     *  so an active slip cue is ducked while the swell plays (safe-range Setup A).
+     *  Current stub body: UE_LOG at Verbose + test counter + duck-hook invocation.
+     *  Audio routing is downstream (audio-programmer scope, out of PM epic).
+     *  Story 012; presentation §3.2 §4 F-AUDIO-CUE-DUCKING Setup A. */
+    void PlayNearMissAudioSwell();
 
     // -----------------------------------------------------------------------
     // Story 004 — F-3 lateral interpolation
@@ -814,6 +846,39 @@ private:
      *  Tunable in the Blueprint default. Story 011; TR-PM-031. */
     UPROPERTY(EditDefaultsOnly, Category="SLIPSTORM|Movement|Tuning")
     float audio_cue_ratio = SLIP_AUDIO_CUE_RATIO_DEFAULT;
+
+    // -----------------------------------------------------------------------
+    // Story 012 — near-miss beat: Y-dip lifecycle constants + state.
+    // TR-PM-030 (near-miss haptic AND-gated dispatch).
+    // -----------------------------------------------------------------------
+
+    /** Y-dip peak downward mesh Z-offset (centimeters). 2-3% of nominal mesh
+     *  height per presentation §3.2. Design default 3.0cm (adjust in Art Bible
+     *  sign-off). Story 012. */
+    static constexpr float Y_DIP_PEAK_CM  = 3.0f;
+
+    /** Y-dip Phase 1 attack duration (seconds): linear ramp from 0 to
+     *  -Y_DIP_PEAK_CM over ~33ms per presentation §3.2. Story 012. */
+    static constexpr float Y_DIP_ATTACK_S = 0.033f;
+
+    /** Y-dip Phase 2 return duration (seconds): linear ramp from
+     *  -Y_DIP_PEAK_CM back to 0 over ~80ms per presentation §3.2. Story 012.
+     *  Total active window = Y_DIP_ATTACK_S + Y_DIP_RETURN_S = 113ms. */
+    static constexpr float Y_DIP_RETURN_S = 0.080f;
+
+    /** True while the Y-dip lifecycle is running. Set by TriggerNearMissBeat;
+     *  cleared when time exceeds ATTACK + RETURN window. */
+    bool y_dip_active = false;
+
+    /** Elapsed time (seconds) since the current Y-dip started. Advanced per-tick
+     *  inside the Rule 5 gate. Resets to 0 on each TriggerNearMissBeat call
+     *  (multiple triggers restart the animation — no additive stacking). */
+    float y_dip_time_s = 0.0f;
+
+    /** Current Y-dip mesh Z-offset (centimeters, negative during active phases).
+     *  Composed into the unified mesh SetRelativeLocation write (Story 012 hoist
+     *  of Story 004's F-3 write). Zero when Y-dip is inactive. */
+    float y_dip_offset_cm = 0.0f;
 
     /** F-5 body/head/arm lean computation.
      *  Reads LeanCurve at three staggered progress offsets: TP (body), TP-HEAD_LAG (head),
