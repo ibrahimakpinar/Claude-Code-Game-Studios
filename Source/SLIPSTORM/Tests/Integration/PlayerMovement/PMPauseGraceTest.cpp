@@ -121,7 +121,7 @@ static bool SpyIsEnabled_PG() { return true; }
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(
     FPMPauseGraceTest,
     "SLIPSTORM.PlayerMovement.PauseGrace",
-    EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 
 void FPMPauseGraceTest::GetTests(
     TArray<FString>& OutBeautifiedNames,

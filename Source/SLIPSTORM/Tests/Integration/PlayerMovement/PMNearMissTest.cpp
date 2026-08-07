@@ -190,7 +190,7 @@ static void ResetSpiesTeardown_NM()
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(
     FPMNearMissTest,
     "SLIPSTORM.PlayerMovement.NearMiss",
-    EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 
 void FPMNearMissTest::GetTests(
     TArray<FString>& OutBeautifiedNames,

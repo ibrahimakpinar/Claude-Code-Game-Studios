@@ -130,7 +130,7 @@ static void SetRSMRunning(URunStateMachineSubsystem* RSM)
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(
     FPMStateMachineTest,
     "SLIPSTORM.PlayerMovement.StateMachine",
-    EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 
 void FPMStateMachineTest::GetTests(
     TArray<FString>& OutBeautifiedNames,

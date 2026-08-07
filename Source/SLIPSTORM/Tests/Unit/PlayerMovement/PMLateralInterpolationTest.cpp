@@ -38,7 +38,7 @@
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(
     FPMLateralInterpolationTest,
     "SLIPSTORM.PlayerMovement.LateralInterpolation",
-    EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 
 void FPMLateralInterpolationTest::GetTests(
     TArray<FString>& OutBeautifiedNames,

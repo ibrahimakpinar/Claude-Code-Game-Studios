@@ -46,7 +46,7 @@
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(
     FPMLeanTest,
     "SLIPSTORM.PlayerMovement.Lean",
-    EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 
 void FPMLeanTest::GetTests(
     TArray<FString>& OutBeautifiedNames,

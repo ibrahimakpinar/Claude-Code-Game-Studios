@@ -124,7 +124,7 @@ static void TickPM_AC(UPlayerLaneMovementComponent* PM, float DeltaSeconds)
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(
     FPMAudioCueTest,
     "SLIPSTORM.PlayerMovement.AudioCue",
-    EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 
 void FPMAudioCueTest::GetTests(
     TArray<FString>& OutBeautifiedNames,

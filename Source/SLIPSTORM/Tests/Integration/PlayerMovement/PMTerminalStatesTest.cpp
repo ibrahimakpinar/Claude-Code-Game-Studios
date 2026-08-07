@@ -104,7 +104,7 @@ static void BroadcastState_TS(UPlayerLaneMovementComponent* PM, ERunState OldSta
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(
     FPMTerminalStatesTest,
     "SLIPSTORM.PlayerMovement.TerminalStates",
-    EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 
 void FPMTerminalStatesTest::GetTests(
     TArray<FString>& OutBeautifiedNames,

@@ -115,7 +115,7 @@ static void SetWorldTime_CT(UWorld* World, double NewTime)
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(
     FPMCommitmentTellTest,
     "SLIPSTORM.PlayerMovement.CommitmentTell",
-    EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 
 void FPMCommitmentTellTest::GetTests(
     TArray<FString>& OutBeautifiedNames,

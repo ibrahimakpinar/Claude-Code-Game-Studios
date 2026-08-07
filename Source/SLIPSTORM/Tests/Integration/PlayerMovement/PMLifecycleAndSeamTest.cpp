@@ -112,7 +112,7 @@ static UWorld* CreateTestPlayWorld(FAutomationTestBase* T, const TCHAR* Label)
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(
     FPMLifecycleAndSeamTest,
     "SLIPSTORM.PlayerMovement.LifecycleAndSeam",
-    EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 
 void FPMLifecycleAndSeamTest::GetTests(
     TArray<FString>& OutBeautifiedNames,

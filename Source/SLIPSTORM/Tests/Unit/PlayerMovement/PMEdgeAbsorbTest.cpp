@@ -66,7 +66,7 @@ static UCurveFloat* MakePlateauCurve_EA(UObject* InOuter, float PlateauValue = 1
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(
     FPMEdgeAbsorbTest,
     "SLIPSTORM.PlayerMovement.EdgeAbsorb",
-    EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 
 void FPMEdgeAbsorbTest::GetTests(
     TArray<FString>& OutBeautifiedNames,

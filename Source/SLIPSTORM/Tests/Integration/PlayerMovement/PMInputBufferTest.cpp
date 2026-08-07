@@ -145,7 +145,7 @@ static void SetRSMRunning_IB(URunStateMachineSubsystem* RSM)
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(
     FPMInputBufferTest,
     "SLIPSTORM.PlayerMovement.InputBuffer",
-    EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 
 void FPMInputBufferTest::GetTests(
     TArray<FString>& OutBeautifiedNames,

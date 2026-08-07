@@ -117,7 +117,7 @@ static void SetRSMRunning_LC(URunStateMachineSubsystem* RSM)
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(
     FPMLeanCompositionTest,
     "SLIPSTORM.PlayerMovement.LeanComposition",
-    EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 
 void FPMLeanCompositionTest::GetTests(
     TArray<FString>& OutBeautifiedNames,

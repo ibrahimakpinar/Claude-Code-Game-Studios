@@ -124,7 +124,7 @@ static void SetRSMRunning_EAC(URunStateMachineSubsystem* RSM)
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(
     FPMEdgeAbsorbCompositionTest,
     "SLIPSTORM.PlayerMovement.EdgeAbsorbComposition",
-    EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 
 void FPMEdgeAbsorbCompositionTest::GetTests(
     TArray<FString>& OutBeautifiedNames,

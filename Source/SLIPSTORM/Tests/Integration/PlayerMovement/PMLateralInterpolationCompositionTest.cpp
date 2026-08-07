@@ -123,7 +123,7 @@ static void SetRSMRunning_LI(URunStateMachineSubsystem* RSM)
 IMPLEMENT_COMPLEX_AUTOMATION_TEST(
     FPMLateralInterpolationCompositionTest,
     "SLIPSTORM.PlayerMovement.LateralInterpolationComposition",
-    EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
 
 void FPMLateralInterpolationCompositionTest::GetTests(
     TArray<FString>& OutBeautifiedNames,
