@@ -43,7 +43,13 @@
 //   R11a-12 accessibility opt-in), unified mesh SetRelativeLocation hoist (X from
 //   F-3, Z from Y-dip; mirrors Story 007 state-agnostic rotation co-write precedent).
 //   TR-PM-030 (near-miss haptic AND-gated dispatch).
-// Watchdog buffer advance by Story 013.
+// Story 013 scope: WatchdogTick body (60-sample rolling ring buffer advance, OR-composed
+//   breach detection at sustained-sub-55 [count>18.18ms >= 30/60] and hitch-cluster
+//   [count>16.67ms >= 18/60 AND max > 33ms], 3.0s continuous-clean hysteresis-release
+//   accumulator, OnHardwarePerformanceBreach delegate broadcast on state transition only,
+//   error/info log per transition). TickComponent call site uncommented immediately
+//   after F-PROLOGUE — consumes raw_dt so hitches are not hidden by the mechanics clamp
+//   per platform §3+§4 single-source DT invariant. TR-PM-020/021/022/024/026.
 
 #include "Player/PlayerLaneMovementComponent.h"
 #include "Player/SlipstormPlayerPawn.h"       // ASlipstormPlayerPawn::MeshComponent — F-3 cache (Story 004)
@@ -230,8 +236,10 @@ void UPlayerLaneMovementComponent::TickComponent(
     float raw_dt = 0.0f, effective_dt = 0.0f;
     ComputeTickDT(raw_dt, effective_dt);
 
-    // Watchdog push (Story 013) — consumes raw_dt.
-    // WatchdogTick(raw_dt);
+    // Watchdog push (Story 013) — consumes raw_dt (NOT effective_dt) so hitches
+    // are not hidden by the mechanics clamp (platform §3+§4 single-source DT invariant).
+    // GREP-GATE: callers of WatchdogTick must pass raw_dt — see PMWatchdogTest.cpp TC10.
+    WatchdogTick(raw_dt);
 
     // Rule 5 gate: skip all mechanics if not in active RUNNING state.
     // Inputs received outside the gate are DISCARDED (not buffered).
@@ -884,6 +892,116 @@ void UPlayerLaneMovementComponent::ComputeTickDT(float& OutRawDT, float& OutEffe
 {
     OutRawDT       = FApp::GetDeltaTime();
     OutEffectiveDT = FMath::Clamp(OutRawDT, 0.0f, SLIPSTORM_PM::MAX_SLIP_DT_S);
+}
+
+// ---------------------------------------------------------------------------
+// WatchdogTick — Story 013 runtime DT watchdog (platform §3 + §4
+// F-WATCHDOG-ROLLING-BUFFER; TR-PM-020/021/022/024/026).
+//
+// Contract:
+//   Input  : raw_dt = ComputeTickDT's OutRawDT (unclamped; NOT effective_dt).
+//            Hitches must reach the watchdog unfiltered — the mechanics-side
+//            clamp to MAX_SLIP_DT_S would otherwise hide sub-30-fps stalls.
+//   Output : side effects only — buffer advance, is_hw_performance_degraded
+//            + bHardwarePerformanceBreachActive flag toggles, delegate
+//            broadcast on state transition, log on transition.
+//
+// State machine (idempotent within-state):
+//   not-breach → breach  : is_breach == true AND !bHardwarePerformanceBreachActive
+//                          → set flags, Broadcast(true), UE_LOG Error.
+//   breach → not-breach  : bHardwarePerformanceBreachActive
+//                          AND ContinuousCleanWindowTime >= 3.0f
+//                          → clear flags, Broadcast(false), UE_LOG Log.
+//   same-state           : neither branch fires (no broadcast, no log).
+//
+// Hysteresis rule (matches GDD line 168-179 pseudo-code):
+//   ContinuousCleanWindowTime advances by raw_dt only when ALL 60 slots are
+//   <= 16.67 ms (count_gt_1667 == 0). Any degraded sample in the window
+//   resets it to 0.0f. Release-window continuity is buffer-wide, not
+//   per-sample — this is the flap-prevention design (R11a-6/7).
+//
+// Log-rate deviation from Control Manifest (docs/registry/architecture.yaml
+// line 28 "next log no earlier than tick 601"): this implementation logs
+// exactly once per state-transition (one Error on breach entry, one Log on
+// release), NOT the per-600-tick repeating cadence. Authorised by story-013
+// Implementation Notes lines 131-135: "Simpler here: log once per breach
+// entry event (no per-tick logging while breach active)." Trace here rather
+// than requiring a story-file lookup.
+//
+// Cost: one O(60) linear scan (~180 float compares + 60 branches) per tick.
+// Zero allocations. Buffer is contiguous, cache-hot. Budget: ~<0.5us mobile.
+//
+// Non-callback invariant (ADR-0007 SD2): subscribers to
+// OnHardwarePerformanceBreach receive the broadcast synchronously inside
+// TickComponent — MUST NOT call back into PM's tick body.
+// ---------------------------------------------------------------------------
+
+void UPlayerLaneMovementComponent::WatchdogTick(float raw_dt)
+{
+    // 1. Advance ring buffer (write-then-advance so index points to next slot).
+    TickDTRollingBuffer[TickDTRingIndex] = raw_dt;
+    TickDTRingIndex = (TickDTRingIndex + 1) % 60;
+
+    // 2. Aggregate stats over the full 60-sample window.
+    int32 count_gt_1818 = 0;
+    int32 count_gt_1667 = 0;
+    float max_sample   = 0.0f; // FApp::GetDeltaTime() is always >= 0; 0.0f seed safe.
+    for (int32 i = 0; i < 60; ++i)
+    {
+        const float s = TickDTRollingBuffer[i];
+        if (s > 0.01818f) { ++count_gt_1818; }
+        if (s > 0.01667f) { ++count_gt_1667; }
+        if (s > max_sample) { max_sample = s; }
+    }
+
+    // 3. OR-composed breach detection (R11a-7 orthogonal criteria).
+    //    Primary: sustained sub-55 fps (>= 30/60 samples > 18.18 ms).
+    //    Secondary: hitch-cluster storm (>= 18/60 samples > 16.67 ms AND
+    //               any single sample > 33 ms).
+    const bool is_breach = (count_gt_1818 >= 30)
+                        || (count_gt_1667 >= 18 && max_sample > 0.033f);
+
+    // 4. Hysteresis-release accumulator. Advances only when the entire
+    //    60-sample window is clean; any degraded sample resets to zero.
+    if (count_gt_1667 == 0)
+    {
+        ContinuousCleanWindowTime += raw_dt;
+    }
+    else
+    {
+        ContinuousCleanWindowTime = 0.0f;
+    }
+
+    // 5. State transitions — mutually exclusive; idempotent while in-state.
+    if (is_breach && !bHardwarePerformanceBreachActive)
+    {
+        bHardwarePerformanceBreachActive = true;
+        is_hw_performance_degraded       = true;
+        OnHardwarePerformanceBreach.Broadcast(/*bEntering=*/true);
+
+#if WITH_DEV_AUTOMATION_TESTS
+        ++WatchdogBroadcastEnter_TestOnlyCallCount;
+#endif
+
+        // One log per entry event (no per-tick spam while breach persists).
+        UE_LOG(LogPlayerMovement, Error,
+            TEXT("Watchdog entered breach: count_gt_1818=%d, count_gt_1667=%d, max_sample=%.4fs"),
+            count_gt_1818, count_gt_1667, max_sample);
+    }
+    else if (bHardwarePerformanceBreachActive && ContinuousCleanWindowTime >= 3.0f)
+    {
+        bHardwarePerformanceBreachActive = false;
+        is_hw_performance_degraded       = false;
+        OnHardwarePerformanceBreach.Broadcast(/*bEntering=*/false);
+
+#if WITH_DEV_AUTOMATION_TESTS
+        ++WatchdogBroadcastRelease_TestOnlyCallCount;
+#endif
+
+        UE_LOG(LogPlayerMovement, Log,
+            TEXT("Watchdog released breach (3.0s continuous clean window)"));
+    }
+    // else: same-state — no broadcast, no log.
 }
 
 // ---------------------------------------------------------------------------

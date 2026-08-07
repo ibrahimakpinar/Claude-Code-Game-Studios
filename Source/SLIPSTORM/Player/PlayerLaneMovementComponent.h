@@ -20,6 +20,7 @@
 // Story: production/epics/player-movement/story-008-terminal-state-handlers.md
 // Story: production/epics/player-movement/story-011-slip-audio-cue-ducking.md
 // Story: production/epics/player-movement/story-012-near-miss-beat.md
+// Story: production/epics/player-movement/story-013-dt-watchdog.md
 
 #pragma once
 
@@ -392,6 +393,14 @@ public:
      *  composition with F-3, and cross-story duck-hook tests. Story 012. */
     friend class FPMNearMissTest;
 
+    /** Grants FPMWatchdogTest direct access to watchdog state (TickDTRollingBuffer,
+     *  TickDTRingIndex, ContinuousCleanWindowTime, bHardwarePerformanceBreachActive,
+     *  is_hw_performance_degraded, OnHardwarePerformanceBreach) and WatchdogTick
+     *  for AC-HW-A Setups A/B/C/D/E/F/G Part 2 breach entry, hysteresis-release,
+     *  flap prevention, subscriber-correctness, and raw_dt-not-effective_dt tests.
+     *  Story 013. */
+    friend class FPMWatchdogTest;
+
     /** Test-only: increments once per LeadingFaceFlash SetScalarParameterValue call.
      *  Verifies cadence cap suppression by counting actual material writes vs
      *  the always-incrementing commitment_tell_fire_count. Story 010. */
@@ -425,8 +434,12 @@ private:
     // Buffer advance and breach evaluation land in Story 013.
     // -----------------------------------------------------------------------
 
-    /** Rolling 60-slot DeltaTime ring buffer for watchdog.  Sentinel: 0.01667f. */
-    float TickDTRollingBuffer[60];
+    /** Rolling 60-slot DeltaTime ring buffer for watchdog.  Sentinel: 0.01667f.
+     *  Zero-initialised at construction; BeginPlay overwrites with the 0.01667f
+     *  sentinel (R11a-6). The `= {}` guards against any future actor-pool /
+     *  skip-BeginPlay path that would otherwise leave garbage floats and
+     *  spuriously false-breach on the first tick. */
+    float TickDTRollingBuffer[60] = {};
 
     /** Write-head for the ring buffer. */
     int32 TickDTRingIndex = 0;
@@ -468,6 +481,15 @@ private:
 
     /** Test-only: increments once per PlayNearMissAudioSwell invocation. Story 012. */
     int32 PlayNearMissAudioSwell_TestOnlyCallCount = 0;
+
+    /** Test-only: increments once per OnHardwarePerformanceBreach.Broadcast(true)
+     *  from WatchdogTick's not-breach→breach transition branch. Verified independently
+     *  of subscriber-count via friend read. AC-HW-A Setup B/F idempotent-broadcast. Story 013. */
+    int32 WatchdogBroadcastEnter_TestOnlyCallCount = 0;
+
+    /** Test-only: increments once per OnHardwarePerformanceBreach.Broadcast(false)
+     *  from WatchdogTick's breach→not-breach transition branch. AC-HW-A Setup D/F. Story 013. */
+    int32 WatchdogBroadcastRelease_TestOnlyCallCount = 0;
 #endif // WITH_DEV_AUTOMATION_TESTS
 
     // -----------------------------------------------------------------------
@@ -497,6 +519,18 @@ private:
      *  Do NOT set bSlipTweenClampActive here — that flag reflects the SLIP_TWEEN
      *  knob-range clamp, NOT the DT overrun clamp. */
     void ComputeTickDT(float& OutRawDT, float& OutEffectiveDT) const;
+
+    /** Story 013 — Runtime DT watchdog tick.  Called from TickComponent
+     *  immediately after F-PROLOGUE with the RAW (unclamped) DT — this must
+     *  never be effective_dt (hitches would be hidden by the mechanics clamp
+     *  per §3+§4 invariant).  Pushes raw_dt into the 60-slot ring buffer,
+     *  scans for two OR-composed breach criteria (sustained sub-55 fps at
+     *  30/60 samples > 18.18 ms; hitch cluster at 18/60 > 16.67 ms AND any
+     *  sample > 33 ms), advances the hysteresis-release accumulator when all
+     *  60 samples <= 16.67 ms, and fires OnHardwarePerformanceBreach exactly
+     *  once per state transition.  Idempotent while state is unchanged.
+     *  Cost: single O(60) scan per tick, zero allocations. */
+    void WatchdogTick(float raw_dt);
 
     /** Returns SLIP_TWEEN_DURATION_S persistently clamped to the safe range [0.10, 0.15]
      *  (AC-21 / AC-SS-A shipping-safety knob-range guard).
