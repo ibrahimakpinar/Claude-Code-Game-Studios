@@ -1,0 +1,64 @@
+name: Automated Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# UE Automation tests require a self-hosted runner with Unreal Editor 5.7 installed.
+# Configure on the runner before first run:
+#   - Install Unreal Engine 5.7
+#   - Set environment variable UE_EDITOR_PATH to the full path of the UnrealEditor binary
+#     (e.g. /Users/Shared/Epic Games/UE_5.7/Engine/Binaries/Mac/UnrealEditor on macOS)
+#   - Ensure SLIPSTORM.uproject exists at repo root (generated once the UE project is created)
+#
+# This workflow will fail until the above are in place AND at least one C++ test class
+# is compiled into Source/SLIPSTORM/Tests/. That is expected during Technical Setup phase.
+
+jobs:
+  test:
+    name: Run UE Automation Tests
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Verify prerequisites
+        run: |
+          if [ -z "$UE_EDITOR_PATH" ]; then
+            echo "::error::UE_EDITOR_PATH is not set on the runner."
+            exit 1
+          fi
+          if [ ! -f "$UE_EDITOR_PATH" ]; then
+            echo "::error::UE_EDITOR_PATH points to a missing binary: $UE_EDITOR_PATH"
+            exit 1
+          fi
+          if [ ! -f "${{ github.workspace }}/SLIPSTORM.uproject" ]; then
+            echo "::error::SLIPSTORM.uproject not found at repo root. Generate the UE project first."
+            exit 1
+          fi
+        shell: bash
+
+      - name: Run Automation Tests
+        run: |
+          "$UE_EDITOR_PATH" "${{ github.workspace }}/SLIPSTORM.uproject" \
+            -nullrhi -nosound -unattended \
+            -ExecCmds="Automation RunTests SLIPSTORM.; Quit" \
+            -log -stdout -FullStdOutLogOutput \
+            -TestExit="Automation Test Queue Empty" \
+            -ReportOutputPath="${{ github.workspace }}/Saved/Automation/Logs"
+        shell: bash
+
+      - name: Upload Test Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ue-automation-logs
+          path: |
+            Saved/Logs/
+            Saved/Automation/Logs/
+          if-no-files-found: warn
