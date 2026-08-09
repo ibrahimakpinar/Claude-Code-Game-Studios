@@ -224,6 +224,22 @@ Null-check `MeshMaterialDynamic` at every write site (both the peak-set in `Trig
   - Verify: fire cadence visibly capped at ≤5 fires/sec; some transitions suppressed.
   - Pass condition: video capture reviewed; PEAT/Harding FPA gate deferred to Polish (this pass is a pre-Polish manual sighting).
 
+### QA Test Cases — PEAT deferred items (Sprint 1 S1-06)
+
+These 2 items were deferred at Story 010 close (see Completion Notes) as R12a-PENDING. Sprint 1 S1-06 discharges them via a perceptual evidence document + art-director sign-off. See `production/qa/qa-plan-sprint-1-2026-08-08.md` § S1-06 for the full acceptance criteria and evidence-storage location.
+
+- **PEAT gate — Harding FPA objective calculation at ±0.80 amplitude**:
+  - Setup: record gameplay clip at 60fps showing ≥5 consecutive commitment-tell flashes at peak amplitude across a sustained-buffer-flush scenario.
+  - Verify: Harding FPA calculation over the recorded flash sequence returns FPA value below the epileptogenic threshold. Amplitude ±0.80 with the existing 200ms cadence cap must be objectively safe under Harding methodology.
+  - Pass condition: evidence doc at `production/qa/evidence/story-010-peat-evidence.md` documents the FPA calculation with the value below threshold. Art-director sign-off row: `[x] Approved`. QA-tester sign-off row: `[x] Approved`.
+
+- **AC-COMMIT-FLASH-ENABLED — accessibility opt-out placeholder**:
+  - Setup: `IsCommitmentTellFlashEnabled() == false` (mocked via a Settings-GDD-forward-contract shim). Trigger 3 sequential slip transitions.
+  - Verify: `commitment_tell_fire_count` increments by 3; MID `SetScalarParameterValue("LeadingFaceFlash", ...)` is NOT called during the 3 fires (verify via test-only counter or spy). Cadence gate state (`time_last_flash_zero_s`) is still updated so the toggle re-enabling mid-run doesn't skip cadence.
+  - Pass condition: this is an integration test (needs the shim) — flag as follow-up when the Settings GDD authoring lands. For Sprint 1 S1-06, the evidence doc records the design intent + points to the missing shim.
+
+*Note: these 2 QA cases were added by /qa-plan for Sprint 1 S1-06. Story 010 remains `Status: Complete`; this section documents the deferred-item discharge path, not a story reopen.*
+
 ---
 
 ## Test Evidence
