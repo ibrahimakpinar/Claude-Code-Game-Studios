@@ -29,6 +29,7 @@
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationEditorCommon.h"
+#include "Tests/AutomationCommon.h"        // FTestWorldWrapper (S1-04 harness fix)
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 #include "Kismet/GameplayStatics.h"
@@ -58,17 +59,22 @@ static UCurveFloat* MakeValidCurve_LI(UObject* InOuter)
     return C;
 }
 
-static UWorld* CreateTestPlayWorld_LI(FAutomationTestBase* T, const TCHAR* Label)
+// S1-04 harness fix: FTestWorldWrapper canonical UE pattern (Engine/Source/Runtime/Engine/Public/Tests/AutomationCommon.h).
+// See PMStateMachineTest.cpp CreateTestPlayWorld_SM for full rationale + engine citation.
+// Wrapper is stack-allocated per TC; destructor handles all teardown (GI Shutdown + DestroyWorldContext).
+static UWorld* CreateTestPlayWorld_LI(FAutomationTestBase* T, FTestWorldWrapper& WorldWrapper, const TCHAR* Label)
 {
-    UWorld* World = FAutomationEditorCommonUtils::CreateNewMap();
-    if (!World)
+    if (!WorldWrapper.CreateTestWorld(EWorldType::Game))
     {
-        T->AddError(FString::Printf(TEXT("%s: CreateNewMap returned null"), Label));
+        T->AddError(FString::Printf(TEXT("%s: FTestWorldWrapper::CreateTestWorld failed"), Label));
         return nullptr;
     }
-    World->InitializeActorsForPlay(FURL(nullptr));
-    World->BeginPlay();
-    return World;
+    if (!WorldWrapper.BeginPlayInTestWorld())
+    {
+        T->AddError(FString::Printf(TEXT("%s: FTestWorldWrapper::BeginPlayInTestWorld failed"), Label));
+        return nullptr;
+    }
+    return WorldWrapper.GetTestWorld();
 }
 
 static ASlipstormPlayerPawn* SpawnPawnWithCurves_LI(
@@ -173,7 +179,8 @@ bool FPMLateralInterpolationCompositionTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("f3_composition_invariant"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_LI(this, TEXT("CC1"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_LI(this, WorldWrapper, TEXT("CC1"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_LI(this, TestWorld, TEXT("CC1"));
         if (!Pawn) { return false; }
@@ -241,7 +248,8 @@ bool FPMLateralInterpolationCompositionTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("lateral_world_position_settled"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_LI(this, TEXT("CC2"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_LI(this, WorldWrapper, TEXT("CC2"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_LI(this, TestWorld, TEXT("CC2"));
         if (!Pawn) { return false; }
@@ -296,7 +304,8 @@ bool FPMLateralInterpolationCompositionTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("lateral_world_position_slipping_write"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_LI(this, TEXT("CC3"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_LI(this, WorldWrapper, TEXT("CC3"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_LI(this, TestWorld, TEXT("CC3"));
         if (!Pawn) { return false; }

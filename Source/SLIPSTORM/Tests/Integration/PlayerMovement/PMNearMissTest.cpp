@@ -33,6 +33,7 @@
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationEditorCommon.h"
+#include "Tests/AutomationCommon.h"        // FTestWorldWrapper (S1-04 harness fix)
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 #include "Kismet/GameplayStatics.h"
@@ -93,17 +94,22 @@ static UCurveFloat* MakeIdentityCurve_NM(UObject* InOuter)
     return C;
 }
 
-static UWorld* CreateTestPlayWorld_NM(FAutomationTestBase* T, const TCHAR* Label)
+// S1-04 harness fix: FTestWorldWrapper canonical UE pattern (Engine/Source/Runtime/Engine/Public/Tests/AutomationCommon.h).
+// See PMStateMachineTest.cpp CreateTestPlayWorld_SM for full rationale + engine citation.
+// Wrapper is stack-allocated per TC; destructor handles all teardown (GI Shutdown + DestroyWorldContext).
+static UWorld* CreateTestPlayWorld_NM(FAutomationTestBase* T, FTestWorldWrapper& WorldWrapper, const TCHAR* Label)
 {
-    UWorld* World = FAutomationEditorCommonUtils::CreateNewMap();
-    if (!World)
+    if (!WorldWrapper.CreateTestWorld(EWorldType::Game))
     {
-        T->AddError(FString::Printf(TEXT("%s: CreateNewMap returned null"), Label));
+        T->AddError(FString::Printf(TEXT("%s: FTestWorldWrapper::CreateTestWorld failed"), Label));
         return nullptr;
     }
-    World->InitializeActorsForPlay(FURL(nullptr));
-    World->BeginPlay();
-    return World;
+    if (!WorldWrapper.BeginPlayInTestWorld())
+    {
+        T->AddError(FString::Printf(TEXT("%s: FTestWorldWrapper::BeginPlayInTestWorld failed"), Label));
+        return nullptr;
+    }
+    return WorldWrapper.GetTestWorld();
 }
 
 static ASlipstormPlayerPawn* SpawnPawnWithCurves_NM(
@@ -242,7 +248,8 @@ bool FPMNearMissTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("setup_a_default_off_zero_haptic"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_NM(this, TEXT("TC1"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_NM(this, WorldWrapper, TEXT("TC1"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_NM(this, TestWorld, TEXT("TC1"));
         if (!Pawn) { return false; }
@@ -297,7 +304,8 @@ bool FPMNearMissTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("setup_b_optin_on_ten_dispatches"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_NM(this, TEXT("TC2"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_NM(this, WorldWrapper, TEXT("TC2"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_NM(this, TestWorld, TEXT("TC2"));
         if (!Pawn) { return false; }
@@ -349,7 +357,8 @@ bool FPMNearMissTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("setup_c_runtime_toggle"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_NM(this, TEXT("TC3"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_NM(this, WorldWrapper, TEXT("TC3"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_NM(this, TestWorld, TEXT("TC3"));
         if (!Pawn) { return false; }
@@ -397,7 +406,8 @@ bool FPMNearMissTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("os_state_cert_b_cert_2"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_NM(this, TEXT("TC4"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_NM(this, WorldWrapper, TEXT("TC4"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_NM(this, TestWorld, TEXT("TC4"));
         if (!Pawn) { return false; }
@@ -433,7 +443,8 @@ bool FPMNearMissTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("y_dip_lifecycle"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_NM(this, TEXT("TC5"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_NM(this, WorldWrapper, TEXT("TC5"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_NM(this, TestWorld, TEXT("TC5"));
         if (!Pawn) { return false; }
@@ -491,7 +502,8 @@ bool FPMNearMissTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("y_dip_restart_no_stacking"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_NM(this, TEXT("TC6"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_NM(this, WorldWrapper, TEXT("TC6"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_NM(this, TestWorld, TEXT("TC6"));
         if (!Pawn) { return false; }
@@ -544,7 +556,8 @@ bool FPMNearMissTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("y_dip_additive_with_f3"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_NM(this, TEXT("TC7"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_NM(this, WorldWrapper, TEXT("TC7"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_NM(this, TestWorld, TEXT("TC7"));
         if (!Pawn) { return false; }
@@ -597,7 +610,8 @@ bool FPMNearMissTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("audio_swell_engages_duck_on_active_slip"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_NM(this, TEXT("TC8"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_NM(this, WorldWrapper, TEXT("TC8"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_NM(this, TestWorld, TEXT("TC8"));
         if (!Pawn) { return false; }
@@ -620,7 +634,8 @@ bool FPMNearMissTest::RunTest(const FString& Parameters)
                   PM->envelope_elapsed_s, 0.0f);
 
         // Verify vacuous case too: no slip active → EngageDuckIfSlipActive no-ops.
-        UWorld* TestWorld2 = CreateTestPlayWorld_NM(this, TEXT("TC8b"));
+        FTestWorldWrapper WorldWrapper2;
+        UWorld* TestWorld2 = CreateTestPlayWorld_NM(this, WorldWrapper2, TEXT("TC8b"));
         if (!TestWorld2) { TestWorld->DestroyActor(Pawn); return false; }
         ASlipstormPlayerPawn* Pawn2 = SpawnPawnWithCurves_NM(this, TestWorld2, TEXT("TC8b"));
         if (!Pawn2) { TestWorld->DestroyActor(Pawn); return false; }
@@ -648,7 +663,8 @@ bool FPMNearMissTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("public_api_reachability"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_NM(this, TEXT("TC9"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_NM(this, WorldWrapper, TEXT("TC9"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_NM(this, TestWorld, TEXT("TC9"));
         if (!Pawn) { return false; }
@@ -679,7 +695,8 @@ bool FPMNearMissTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("y_dip_renders_during_settled"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_NM(this, TEXT("TC10"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_NM(this, WorldWrapper, TEXT("TC10"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_NM(this, TestWorld, TEXT("TC10"));
         if (!Pawn) { return false; }
@@ -734,7 +751,8 @@ bool FPMNearMissTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("snap_reset_clears_y_dip_state"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_NM(this, TEXT("TC11"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_NM(this, WorldWrapper, TEXT("TC11"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_NM(this, TestWorld, TEXT("TC11"));
         if (!Pawn) { return false; }

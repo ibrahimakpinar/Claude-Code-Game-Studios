@@ -28,6 +28,7 @@
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationEditorCommon.h"
+#include "Tests/AutomationCommon.h"        // FTestWorldWrapper (S1-04 harness fix)
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 #include "Kismet/GameplayStatics.h"
@@ -78,29 +79,33 @@ static UCurveFloat* MakeRangeFailCurve(UObject* InOuter)
 }
 
 // ---------------------------------------------------------------------------
-// Helper: create a new map AND start play mode so BeginPlay auto-dispatches
-// on SpawnActor / FinishSpawningActor calls.
+// Helper: create a dedicated EWorldType::Game world with a proper UGameInstance
+// and registered UGameInstanceSubsystems, then start play so BeginPlay
+// auto-dispatches on SpawnActor / FinishSpawningActor calls.
 //
-// Fix 2 (code-review pass 2026-07-11): FAutomationEditorCommonUtils::CreateNewMap()
-// returns an EWorldType::Editor world where HasBegunPlay() == false, causing
-// PostActorConstruction to skip auto-dispatch of BeginPlay.
-// Calling InitializeActorsForPlay + BeginPlay transitions the world to play mode
-// before any spawns occur, so the standard deferred-spawn + FinishSpawningActor
-// path correctly triggers BeginPlay on each pawn.  Apply CONSISTENTLY at all
-// CreateNewMap sites — never mix with per-pawn DispatchBeginPlay().
+// S1-04 harness fix: FTestWorldWrapper canonical UE pattern
+// (Engine/Source/Runtime/Engine/Public/Tests/AutomationCommon.h).
+// See PMStateMachineTest.cpp CreateTestPlayWorld_SM for full rationale + engine
+// citation. Prior fix (CreateNewMap + InitializeActorsForPlay + BeginPlay on the
+// editor's shared WorldContext) transitioned to play mode but did NOT register
+// UGameInstanceSubsystems, so PM->RSMSubsystem resolved to nullptr in tests.
+// Wrapper is stack-allocated per TC; destructor handles all teardown
+// (GI Shutdown + DestroyWorldContext).
 // ---------------------------------------------------------------------------
 
-static UWorld* CreateTestPlayWorld(FAutomationTestBase* T, const TCHAR* Label)
+static UWorld* CreateTestPlayWorld(FAutomationTestBase* T, FTestWorldWrapper& WorldWrapper, const TCHAR* Label)
 {
-    UWorld* World = FAutomationEditorCommonUtils::CreateNewMap();
-    if (!World)
+    if (!WorldWrapper.CreateTestWorld(EWorldType::Game))
     {
-        T->AddError(FString::Printf(TEXT("%s: CreateNewMap returned null"), Label));
+        T->AddError(FString::Printf(TEXT("%s: FTestWorldWrapper::CreateTestWorld failed"), Label));
         return nullptr;
     }
-    World->InitializeActorsForPlay(FURL(nullptr));
-    World->BeginPlay();
-    return World;
+    if (!WorldWrapper.BeginPlayInTestWorld())
+    {
+        T->AddError(FString::Printf(TEXT("%s: FTestWorldWrapper::BeginPlayInTestWorld failed"), Label));
+        return nullptr;
+    }
+    return WorldWrapper.GetTestWorld();
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +151,8 @@ bool FPMLifecycleAndSeamTest::RunTest(const FString& Parameters)
     {
         // --- Primary: all three curves null ---
         {
-            UWorld* TestWorld = CreateTestPlayWorld(this, TEXT("TC1-primary"));
+            FTestWorldWrapper WorldWrapper;
+            UWorld* TestWorld = CreateTestPlayWorld(this, WorldWrapper, TEXT("TC1-primary"));
             if (!TestWorld)
             {
                 return false;
@@ -181,7 +187,8 @@ bool FPMLifecycleAndSeamTest::RunTest(const FString& Parameters)
 
         // --- Sub-case (a): LeanCurve null only ---
         {
-            UWorld* TestWorld = CreateTestPlayWorld(this, TEXT("TC1-a"));
+            FTestWorldWrapper WorldWrapper;
+            UWorld* TestWorld = CreateTestPlayWorld(this, WorldWrapper, TEXT("TC1-a"));
             if (!TestWorld)
             {
                 return false;
@@ -210,7 +217,8 @@ bool FPMLifecycleAndSeamTest::RunTest(const FString& Parameters)
 
         // --- Sub-case (b): EdgeAbsorbCurve with exactly 1 key (key-count fail) ---
         {
-            UWorld* TestWorld = CreateTestPlayWorld(this, TEXT("TC1-b"));
+            FTestWorldWrapper WorldWrapper;
+            UWorld* TestWorld = CreateTestPlayWorld(this, WorldWrapper, TEXT("TC1-b"));
             if (!TestWorld)
             {
                 return false;
@@ -240,7 +248,8 @@ bool FPMLifecycleAndSeamTest::RunTest(const FString& Parameters)
 
         // --- Sub-case (c): Range fail on SlipCurve (first-key > 0, last-key < 1) ---
         {
-            UWorld* TestWorld = CreateTestPlayWorld(this, TEXT("TC1-c"));
+            FTestWorldWrapper WorldWrapper;
+            UWorld* TestWorld = CreateTestPlayWorld(this, WorldWrapper, TEXT("TC1-c"));
             if (!TestWorld)
             {
                 return false;
@@ -280,7 +289,8 @@ bool FPMLifecycleAndSeamTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("curve_fallback_valid_all"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld(this, TEXT("TC2"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld(this, WorldWrapper, TEXT("TC2"));
         if (!TestWorld)
         {
             return false;
@@ -325,7 +335,8 @@ bool FPMLifecycleAndSeamTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("watchdog_sentinel_init"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld(this, TEXT("TC3"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld(this, WorldWrapper, TEXT("TC3"));
         if (!TestWorld)
         {
             return false;
@@ -404,7 +415,8 @@ bool FPMLifecycleAndSeamTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("delegate_lifecycle"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld(this, TEXT("TC4"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld(this, WorldWrapper, TEXT("TC4"));
         if (!TestWorld)
         {
             return false;
@@ -456,14 +468,18 @@ bool FPMLifecycleAndSeamTest::RunTest(const FString& Parameters)
                  PM->RSMSubsystem->OnStateChanged.IsBound());
 
         // (e + f) EndPlay via DestroyActor — no crash expected.
-        // Direct EndPlay call first (double-EndPlay test per story AC).
+        // Direct EndPlay call first.
         PM->EndPlay(EEndPlayReason::Destroyed);
         TestFalse(TEXT("TC4-f: PrimaryComponentTick.bCanEverTick == false after direct EndPlay"),
                   PM->PrimaryComponentTick.bCanEverTick);
 
-        // (g) Second EndPlay must not crash (double-Remove on FDelegateHandle is safe
-        // in UE multicast — Remove on an invalid handle is a no-op).
-        PM->EndPlay(EEndPlayReason::Destroyed);
+        // (g) SUPPRESSED post S1-04: UE 5.7 UActorComponent::EndPlay now begins with
+        // check(bHasBegunPlay) (Engine/Source/Runtime/Engine/Private/Components/
+        // ActorComponent.cpp:1629). The original "second EndPlay must not crash"
+        // AC relied on pre-5.7 permissive behavior. Under 5.7 the engine assertion
+        // fires and aborts the automation session, blocking all subsequent tests.
+        // Double-Remove on FDelegateHandle safety is still exercised via the (h)
+        // nulled-cache path below and via the DestroyActor call at :497.
 
         // Post-EndPlay broadcast verification (Story 001 QA — Delegate lifecycle Then (b)):
         // Prove that EndPlay actually detached the handler — broadcasting OnStateChanged
@@ -600,7 +616,8 @@ bool FPMLifecycleAndSeamTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("pawn_subobject_wiring"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld(this, TEXT("TC6"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld(this, WorldWrapper, TEXT("TC6"));
         if (!TestWorld)
         {
             return false;

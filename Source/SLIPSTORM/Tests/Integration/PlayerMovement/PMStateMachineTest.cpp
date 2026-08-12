@@ -28,6 +28,7 @@
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationEditorCommon.h"
+#include "Tests/AutomationCommon.h"        // FTestWorldWrapper (S1-04 harness fix)
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 #include "Kismet/GameplayStatics.h"
@@ -56,20 +57,45 @@ static UCurveFloat* MakeValidCurve_SM(UObject* InOuter)
 }
 
 // ---------------------------------------------------------------------------
-// Helper: CreateTestPlayWorld — mirrors Story 001a pattern.
+// Helper: CreateTestPlayWorld — uses FTestWorldWrapper (ENGINE_API) to create
+// a dedicated EWorldType::Game world with a proper UGameInstance + registered
+// UGameInstanceSubsystems. This is the canonical UE-authored pattern from
+// Engine/Source/Runtime/Engine/Public/Tests/AutomationCommon.h line 30-72.
+//
+// Root cause of prior test-harness failures (S1-04):
+//   FAutomationEditorCommonUtils::CreateNewMap() returns an EWorldType::Editor
+//   world with no GameInstance. UGameInstanceSubsystem registration is gated
+//   on Game-type worlds with a properly-installed WorldContext. Manual
+//   NewObject<UGameInstance> + SetGameInstance + Init on the editor's shared
+//   WorldContext does NOT trigger subsystem instantiation for the pawn's
+//   BeginPlay lookup path (proven by 2026-08-08 pointer diagnostic:
+//   PM->RSMSubsystem == 0x0 despite World/GameInstance matching test side).
+//
+// FTestWorldWrapper solves this by:
+//   1. Creating a fresh EWorldType::Game world via UWorld::CreateWorld
+//   2. Creating a dedicated WorldContext via GEngine->CreateNewWorldContext
+//   3. Wiring GameInstance + Init in the correct order
+//   4. Destructor calls DestroyTestWorld → GI->Shutdown → DestroyWorldContext,
+//      preventing GI/subsystem contamination between TCs.
+//
+// The FTestWorldWrapper is stack-allocated per TC — its destructor handles
+// all teardown automatically, so no manual DestroyTestWorld or ON_SCOPE_EXIT
+// is needed for world lifecycle.
 // ---------------------------------------------------------------------------
 
-static UWorld* CreateTestPlayWorld_SM(FAutomationTestBase* T, const TCHAR* Label)
+static UWorld* CreateTestPlayWorld_SM(FAutomationTestBase* T, FTestWorldWrapper& WorldWrapper, const TCHAR* Label)
 {
-    UWorld* World = FAutomationEditorCommonUtils::CreateNewMap();
-    if (!World)
+    if (!WorldWrapper.CreateTestWorld(EWorldType::Game))
     {
-        T->AddError(FString::Printf(TEXT("%s: CreateNewMap returned null"), Label));
+        T->AddError(FString::Printf(TEXT("%s: FTestWorldWrapper::CreateTestWorld failed"), Label));
         return nullptr;
     }
-    World->InitializeActorsForPlay(FURL(nullptr));
-    World->BeginPlay();
-    return World;
+    if (!WorldWrapper.BeginPlayInTestWorld())
+    {
+        T->AddError(FString::Printf(TEXT("%s: FTestWorldWrapper::BeginPlayInTestWorld failed"), Label));
+        return nullptr;
+    }
+    return WorldWrapper.GetTestWorld();
 }
 
 // ---------------------------------------------------------------------------
@@ -170,7 +196,8 @@ bool FPMStateMachineTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("ac01_baseline_slip"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_SM(this, TEXT("AC-01"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_SM(this, WorldWrapper, TEXT("AC-01"));
         if (!TestWorld) return false;
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves(this, TestWorld, TEXT("AC-01"));
         if (!Pawn) return false;
@@ -238,7 +265,8 @@ bool FPMStateMachineTest::RunTest(const FString& Parameters)
 
         for (int32 i = 0; i < 6; ++i)
         {
-            UWorld* TestWorld = CreateTestPlayWorld_SM(this, Names[i]);
+            FTestWorldWrapper WorldWrapper;
+            UWorld* TestWorld = CreateTestPlayWorld_SM(this, WorldWrapper, Names[i]);
             if (!TestWorld) return false;
             ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves(this, TestWorld, Names[i]);
             if (!Pawn) return false;
@@ -274,7 +302,8 @@ bool FPMStateMachineTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("ac09_paused_discard"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_SM(this, TEXT("AC-09"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_SM(this, WorldWrapper, TEXT("AC-09"));
         if (!TestWorld) return false;
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves(this, TestWorld, TEXT("AC-09"));
         if (!Pawn) return false;
@@ -308,7 +337,8 @@ bool FPMStateMachineTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("ac10_grace_discard"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_SM(this, TEXT("AC-10"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_SM(this, WorldWrapper, TEXT("AC-10"));
         if (!TestWorld) return false;
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves(this, TestWorld, TEXT("AC-10"));
         if (!Pawn) return false;
@@ -343,7 +373,8 @@ bool FPMStateMachineTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("ac23_settled_to_slipping_sync"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_SM(this, TEXT("AC-23"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_SM(this, WorldWrapper, TEXT("AC-23"));
         if (!TestWorld) return false;
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves(this, TestWorld, TEXT("AC-23"));
         if (!Pawn) return false;
@@ -396,7 +427,8 @@ bool FPMStateMachineTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("ac24_midpoint_broadcast"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_SM(this, TEXT("AC-24"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_SM(this, WorldWrapper, TEXT("AC-24"));
         if (!TestWorld) return false;
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves(this, TestWorld, TEXT("AC-24"));
         if (!Pawn) return false;
@@ -482,7 +514,8 @@ bool FPMStateMachineTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("ac34_source_lane_semantic"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_SM(this, TEXT("AC-34"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_SM(this, WorldWrapper, TEXT("AC-34"));
         if (!TestWorld) return false;
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves(this, TestWorld, TEXT("AC-34"));
         if (!Pawn) return false;
@@ -552,7 +585,8 @@ bool FPMStateMachineTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("force_tick_now_prologue"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_SM(this, TEXT("prologue"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_SM(this, WorldWrapper, TEXT("prologue"));
         if (!TestWorld) return false;
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves(this, TestWorld, TEXT("prologue"));
         if (!Pawn) return false;

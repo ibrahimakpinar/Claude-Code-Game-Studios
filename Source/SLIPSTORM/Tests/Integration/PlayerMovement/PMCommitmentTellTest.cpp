@@ -32,6 +32,7 @@
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationEditorCommon.h"
+#include "Tests/AutomationCommon.h"        // FTestWorldWrapper (S1-04 harness fix)
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 #include "Kismet/GameplayStatics.h"
@@ -60,17 +61,22 @@ static UCurveFloat* MakeIdentityCurve_CT(UObject* InOuter)
     return C;
 }
 
-static UWorld* CreateTestPlayWorld_CT(FAutomationTestBase* T, const TCHAR* Label)
+// S1-04 harness fix: FTestWorldWrapper canonical UE pattern (Engine/Source/Runtime/Engine/Public/Tests/AutomationCommon.h).
+// See PMStateMachineTest.cpp CreateTestPlayWorld_SM for full rationale + engine citation.
+// Wrapper is stack-allocated per TC; destructor handles all teardown (GI Shutdown + DestroyWorldContext).
+static UWorld* CreateTestPlayWorld_CT(FAutomationTestBase* T, FTestWorldWrapper& WorldWrapper, const TCHAR* Label)
 {
-    UWorld* World = FAutomationEditorCommonUtils::CreateNewMap();
-    if (!World)
+    if (!WorldWrapper.CreateTestWorld(EWorldType::Game))
     {
-        T->AddError(FString::Printf(TEXT("%s: CreateNewMap returned null"), Label));
+        T->AddError(FString::Printf(TEXT("%s: FTestWorldWrapper::CreateTestWorld failed"), Label));
         return nullptr;
     }
-    World->InitializeActorsForPlay(FURL(nullptr));
-    World->BeginPlay();
-    return World;
+    if (!WorldWrapper.BeginPlayInTestWorld())
+    {
+        T->AddError(FString::Printf(TEXT("%s: FTestWorldWrapper::BeginPlayInTestWorld failed"), Label));
+        return nullptr;
+    }
+    return WorldWrapper.GetTestWorld();
 }
 
 static ASlipstormPlayerPawn* SpawnPawnWithCurves_CT(
@@ -159,7 +165,8 @@ bool FPMCommitmentTellTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("ac29_amplitude_and_lifecycle_timing"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_CT(this, TEXT("TC1"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_CT(this, WorldWrapper, TEXT("TC1"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_CT(this, TestWorld, TEXT("TC1"));
         if (!Pawn) { return false; }
@@ -237,7 +244,8 @@ bool FPMCommitmentTellTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("direction_sign_left_and_right"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_CT(this, TEXT("TC2"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_CT(this, WorldWrapper, TEXT("TC2"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_CT(this, TestWorld, TEXT("TC2"));
         if (!Pawn) { return false; }
@@ -278,7 +286,8 @@ bool FPMCommitmentTellTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("counter_always_increments_setup_a"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_CT(this, TEXT("TC3"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_CT(this, WorldWrapper, TEXT("TC3"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_CT(this, TestWorld, TEXT("TC3"));
         if (!Pawn) { return false; }
@@ -312,7 +321,8 @@ bool FPMCommitmentTellTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("cadence_cap_suppression"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_CT(this, TEXT("TC4"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_CT(this, WorldWrapper, TEXT("TC4"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_CT(this, TestWorld, TEXT("TC4"));
         if (!Pawn) { return false; }
@@ -343,7 +353,8 @@ bool FPMCommitmentTellTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("cadence_cap_release"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_CT(this, TEXT("TC5"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_CT(this, WorldWrapper, TEXT("TC5"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_CT(this, TestWorld, TEXT("TC5"));
         if (!Pawn) { return false; }
@@ -377,7 +388,8 @@ bool FPMCommitmentTellTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("setup_b_isolated_slips"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_CT(this, TEXT("TC6"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_CT(this, WorldWrapper, TEXT("TC6"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_CT(this, TestWorld, TEXT("TC6"));
         if (!Pawn) { return false; }
@@ -415,7 +427,8 @@ bool FPMCommitmentTellTest::RunTest(const FString& Parameters)
     // -----------------------------------------------------------------------
     if (Parameters == TEXT("snap_reset_clears_flash_state"))
     {
-        UWorld* TestWorld = CreateTestPlayWorld_CT(this, TEXT("TC7"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_CT(this, WorldWrapper, TEXT("TC7"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_CT(this, TestWorld, TEXT("TC7"));
         if (!Pawn) { return false; }
@@ -459,7 +472,8 @@ bool FPMCommitmentTellTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("null_mid_null_guard_no_ops_write"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_CT(this, TEXT("TC8"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_CT(this, WorldWrapper, TEXT("TC8"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_CT(this, TestWorld, TEXT("TC8"));
         if (!Pawn) { return false; }

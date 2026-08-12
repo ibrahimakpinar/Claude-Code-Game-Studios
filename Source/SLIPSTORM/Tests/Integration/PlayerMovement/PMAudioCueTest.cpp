@@ -32,6 +32,7 @@
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationEditorCommon.h"
+#include "Tests/AutomationCommon.h"        // FTestWorldWrapper (S1-04 harness fix)
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 #include "Kismet/GameplayStatics.h"
@@ -59,17 +60,22 @@ static UCurveFloat* MakeIdentityCurve_AC(UObject* InOuter)
     return C;
 }
 
-static UWorld* CreateTestPlayWorld_AC(FAutomationTestBase* T, const TCHAR* Label)
+// S1-04 harness fix: FTestWorldWrapper canonical UE pattern (Engine/Source/Runtime/Engine/Public/Tests/AutomationCommon.h).
+// See PMStateMachineTest.cpp CreateTestPlayWorld_SM for full rationale + engine citation.
+// Wrapper is stack-allocated per TC; destructor handles all teardown (GI Shutdown + DestroyWorldContext).
+static UWorld* CreateTestPlayWorld_AC(FAutomationTestBase* T, FTestWorldWrapper& WorldWrapper, const TCHAR* Label)
 {
-    UWorld* World = FAutomationEditorCommonUtils::CreateNewMap();
-    if (!World)
+    if (!WorldWrapper.CreateTestWorld(EWorldType::Game))
     {
-        T->AddError(FString::Printf(TEXT("%s: CreateNewMap returned null"), Label));
+        T->AddError(FString::Printf(TEXT("%s: FTestWorldWrapper::CreateTestWorld failed"), Label));
         return nullptr;
     }
-    World->InitializeActorsForPlay(FURL(nullptr));
-    World->BeginPlay();
-    return World;
+    if (!WorldWrapper.BeginPlayInTestWorld())
+    {
+        T->AddError(FString::Printf(TEXT("%s: FTestWorldWrapper::BeginPlayInTestWorld failed"), Label));
+        return nullptr;
+    }
+    return WorldWrapper.GetTestWorld();
 }
 
 static ASlipstormPlayerPawn* SpawnPawnWithCurves_AC(
@@ -169,7 +175,8 @@ bool FPMAudioCueTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("proportionality_six_pairs"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_AC(this, TEXT("TC1"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_AC(this, WorldWrapper, TEXT("TC1"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_AC(this, TestWorld, TEXT("TC1"));
         if (!Pawn) { return false; }
@@ -221,7 +228,8 @@ bool FPMAudioCueTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("setup_a_active_overlap_ducking"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_AC(this, TEXT("TC2"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_AC(this, WorldWrapper, TEXT("TC2"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_AC(this, TestWorld, TEXT("TC2"));
         if (!Pawn) { return false; }
@@ -303,7 +311,8 @@ bool FPMAudioCueTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("setup_b_vacuous_no_ducking"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_AC(this, TEXT("TC3"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_AC(this, WorldWrapper, TEXT("TC3"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_AC(this, TestWorld, TEXT("TC3"));
         if (!Pawn) { return false; }
@@ -389,7 +398,8 @@ bool FPMAudioCueTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("ec16_triple_overlap_hardcut_precedence"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_AC(this, TEXT("TC5"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_AC(this, WorldWrapper, TEXT("TC5"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_AC(this, TestWorld, TEXT("TC5"));
         if (!Pawn) { return false; }
@@ -457,7 +467,8 @@ bool FPMAudioCueTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("center_pan_invariant"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_AC(this, TEXT("TC6"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_AC(this, WorldWrapper, TEXT("TC6"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_AC(this, TestWorld, TEXT("TC6"));
         if (!Pawn) { return false; }
@@ -493,7 +504,8 @@ bool FPMAudioCueTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("hard_cut_ramp_duration_le_5ms"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_AC(this, TEXT("TC7"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_AC(this, WorldWrapper, TEXT("TC7"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_AC(this, TestWorld, TEXT("TC7"));
         if (!Pawn) { return false; }
@@ -544,7 +556,8 @@ bool FPMAudioCueTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("rate_transposition_clamp"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_AC(this, TEXT("TC8"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_AC(this, WorldWrapper, TEXT("TC8"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_AC(this, TestWorld, TEXT("TC8"));
         if (!Pawn) { return false; }
@@ -601,7 +614,8 @@ bool FPMAudioCueTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("dispatch_site_settled_to_slipping"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_AC(this, TEXT("TC9"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_AC(this, WorldWrapper, TEXT("TC9"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_AC(this, TestWorld, TEXT("TC9"));
         if (!Pawn) { return false; }

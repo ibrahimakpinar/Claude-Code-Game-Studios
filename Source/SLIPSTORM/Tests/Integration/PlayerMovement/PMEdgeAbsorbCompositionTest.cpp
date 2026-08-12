@@ -30,6 +30,7 @@
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationEditorCommon.h"
+#include "Tests/AutomationCommon.h"        // FTestWorldWrapper (S1-04 harness fix)
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 #include "Kismet/GameplayStatics.h"
@@ -64,17 +65,22 @@ static UCurveFloat* MakePlateauCurve_EAC(UObject* InOuter, float PlateauValue)
     return C;
 }
 
-static UWorld* CreateTestPlayWorld_EAC(FAutomationTestBase* T, const TCHAR* Label)
+// S1-04 harness fix: FTestWorldWrapper canonical UE pattern (Engine/Source/Runtime/Engine/Public/Tests/AutomationCommon.h).
+// See PMStateMachineTest.cpp CreateTestPlayWorld_SM for full rationale + engine citation.
+// Wrapper is stack-allocated per TC; destructor handles all teardown (GI Shutdown + DestroyWorldContext).
+static UWorld* CreateTestPlayWorld_EAC(FAutomationTestBase* T, FTestWorldWrapper& WorldWrapper, const TCHAR* Label)
 {
-    UWorld* World = FAutomationEditorCommonUtils::CreateNewMap();
-    if (!World)
+    if (!WorldWrapper.CreateTestWorld(EWorldType::Game))
     {
-        T->AddError(FString::Printf(TEXT("%s: CreateNewMap returned null"), Label));
+        T->AddError(FString::Printf(TEXT("%s: FTestWorldWrapper::CreateTestWorld failed"), Label));
         return nullptr;
     }
-    World->InitializeActorsForPlay(FURL(nullptr));
-    World->BeginPlay();
-    return World;
+    if (!WorldWrapper.BeginPlayInTestWorld())
+    {
+        T->AddError(FString::Printf(TEXT("%s: FTestWorldWrapper::BeginPlayInTestWorld failed"), Label));
+        return nullptr;
+    }
+    return WorldWrapper.GetTestWorld();
 }
 
 static ASlipstormPlayerPawn* SpawnPawnWithCurves_EAC(
@@ -163,7 +169,8 @@ bool FPMEdgeAbsorbCompositionTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("ac02_edge_noop_stays_settled_fires_f6"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_EAC(this, TEXT("CC1"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_EAC(this, WorldWrapper, TEXT("CC1"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_EAC(this, TestWorld, TEXT("CC1"));
         if (!Pawn) { return false; }
@@ -209,7 +216,8 @@ bool FPMEdgeAbsorbCompositionTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("ac_f6_c_valid_slip_does_not_fire_f6"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_EAC(this, TEXT("CC2"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_EAC(this, WorldWrapper, TEXT("CC2"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_EAC(this, TestWorld, TEXT("CC2"));
         if (!Pawn) { return false; }
@@ -252,7 +260,8 @@ bool FPMEdgeAbsorbCompositionTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("override_snapshot_on_settled_to_slipping"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_EAC(this, TEXT("CC3"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_EAC(this, WorldWrapper, TEXT("CC3"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_EAC(this, TestWorld, TEXT("CC3"));
         if (!Pawn) { return false; }
@@ -366,7 +375,8 @@ bool FPMEdgeAbsorbCompositionTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("ac24_no_on_slip_midpoint_during_f6_tail"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_EAC(this, TEXT("CC5"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_EAC(this, WorldWrapper, TEXT("CC5"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_EAC(this, TestWorld, TEXT("CC5"));
         if (!Pawn) { return false; }
@@ -420,7 +430,8 @@ bool FPMEdgeAbsorbCompositionTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("ac_f6_a_farright_slipright_mid_tail_all_negative"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_EAC(this, TEXT("CC6"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_EAC(this, WorldWrapper, TEXT("CC6"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_EAC(this, TestWorld, TEXT("CC6"));
         if (!Pawn) { return false; }
@@ -481,7 +492,8 @@ bool FPMEdgeAbsorbCompositionTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("ac_f6_c_farleft_slipleft_fires_f6"))
     {
         // Arrange
-        UWorld* TestWorld = CreateTestPlayWorld_EAC(this, TEXT("CC7"));
+        FTestWorldWrapper WorldWrapper;
+        UWorld* TestWorld = CreateTestPlayWorld_EAC(this, WorldWrapper, TEXT("CC7"));
         if (!TestWorld) { return false; }
         ASlipstormPlayerPawn* Pawn = SpawnPawnWithCurves_EAC(this, TestWorld, TEXT("CC7"));
         if (!Pawn) { return false; }
