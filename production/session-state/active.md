@@ -58,7 +58,7 @@ Sprint plan at `production/sprints/sprint-1.md`; QA plan at `production/qa/qa-pl
 - **S1-04** — DONE (`fa03f32`).
 - **S1-05** — DONE (`91f4c4c`) — ADR-0011 committed as **Proposed**. Meets AC (sprint-1.md:24 allows Proposed). Promotion to Accepted deferred until ADR-0005 lands (blocked on Foundation HW-verification at ADR-0001) or a pragmatic-promotion architecture-review pass.
 - **S1-06** (PEAT/Harding FPA evidence + art-director sign-off, R12a-PENDING) — not started.
-- **S1-07** (UE-S1 ADR-0009 IG-3 carve-out annotation at `PLMC.h:121`) — not started; 15-min task.
+- **S1-07** — DONE (`b26c6e8`) — one-line IG-3 scope carve-out annotation added at `PlayerLaneMovementComponent.h:122`.
 - **S1-08** (`/architecture-review` PM downstream consumers) — unblocked, not started.
 - **S1-09** (sequential Setup B → Setup D watchdog integration test) — unblocked, not started.
 - **S1-10** (runtime-verification runbook `docs/tests-headless.md`) — unblocked, not started.
@@ -68,14 +68,15 @@ Sprint plan at `production/sprints/sprint-1.md`; QA plan at `production/qa/qa-pl
 1. **Build-verify foundation-to-build commit** (`02654f2`) — run `Build/BatchFiles/RunUAT.sh` or in-editor build to confirm fresh clone builds before starting the next epic. **PARTIAL PROGRESS 2026-08-10/12**: `SLIPSTORMEditor` target confirmed to build fresh via `Build/BatchFiles/Mac/Build.sh` during S1-04 verification. Full RunUAT / Shipping-target validation still pending.
 2. **Runtime-verification runbook** (S1-10) — as above.
 3. **QA-S1** (S1-09) — as above.
-4. **UE-S1** (S1-07) — as above.
+4. ~~**UE-S1** (S1-07) — as above.~~ **DONE** in `b26c6e8`.
 5. **`docs/architecture/control-manifest.md`** — does not exist yet; referenced by `/story-done` manifest-staleness check (currently skipped).
 6. **`directory-structure.md` doc drift** — states `production/session-state/active.md` is gitignored, but the file is tracked. Either update the doc or `git rm --cached` the file.
 7. **S1-04 residuals** — R1 (bug candidate), R2 (test stale), R3 (bug candidate), plus TC4-g double-EndPlay AC deprecated for UE 5.7. Documented at `production/qa/evidence/s1-04-harness-fix-evidence.md`.
 
 ### Next recommended
 
-1. **S1-08** — `/architecture-review` PM downstream consumers. Now fully unblocked (S1-04 + S1-05 both done). Natural PM epic-close follow-on. Will surface any ADR-0011 amendments needed to close Wave Spawner R11a-8 grace-window binding.
-2. **S1-07** — 15-min UE-S1 follow-up (ADR-0009 IG-3 annotation at `PLMC.h:121`). Quick housekeeping win — good warm-up or batch with S1-08.
-3. **S1-06** — Story-010 PEAT/Harding FPA evidence + art-director sign-off. R12a-PENDING carryover; 0.5-day estimate; no dependencies.
-4. **Wave Spawner epic** — `/create-epics wave-spawner` is now technically unblocked by ADR-0011 Proposed, but epic-Done gates on ADR-0010 (Pull-Wave lifecycle, not yet authored — see ADR-0011 Risks table). Do NOT start story authoring until ADR-0010 lands.
+1. **S1-08** — `/architecture-review` PM downstream consumers. Fully unblocked (S1-04 + S1-05 both done). Natural PM epic-close follow-on. Will surface any ADR-0011 amendments needed to close Wave Spawner R11a-8 grace-window binding. ~0.5 day.
+2. **S1-06** — Story-010 PEAT/Harding FPA evidence + art-director sign-off. R12a-PENDING carryover; 0.5-day estimate; no dependencies.
+3. **S1-09** — Sequential Setup B → Setup D watchdog integration test. Unblocked by S1-04; 0.5 day.
+4. **S1-10** — Runtime-verification runbook at `docs/tests-headless.md`. Unblocked by S1-04; 0.25 day.
+5. **Wave Spawner epic** — `/create-epics wave-spawner` is now technically unblocked by ADR-0011 Proposed, but epic-Done gates on ADR-0010 (Pull-Wave lifecycle, not yet authored — see ADR-0011 Risks table). Do NOT start story authoring until ADR-0010 lands.
