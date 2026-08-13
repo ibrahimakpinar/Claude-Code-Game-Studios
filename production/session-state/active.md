@@ -37,29 +37,45 @@ Ten commits filled a "foundation never committed" hole discovered when investiga
 - `953967c` Registry population + story-010 S1-06 discharge — 4 files, 3180 lines
 - `e05ec9e` Pull-wave perf spike from 2026-07-03 (PARTIAL verdict) — 4 files, 434 lines
 
-Working tree post-session:
-- 10 modified PM test .cpp files carrying WIP `#include "Tests/AutomationCommon.h"` (S1-04 harness fix — see `production/sprints/sprint-1.md` S1-04, target 57% → ≥85% integration pass rate; the include is one step of a 1.5-day task, not the whole thing) — HOLDING
-- `production/session-state/active.md` — this file, rewritten fresh
+Working tree: clean (S1-04 committed as `fa03f32`).
+
+### S1-04 completion — 2026-08-12
+
+Committed as `fa03f32 fix(tests): S1-04 harness fix — FTestWorldWrapper for RSMSubsystem registration` — 12 files, 451 insertions, 174 deletions.
+
+- Applied `FTestWorldWrapper` pattern to 11 PM integration test files (2 were pre-converted WIP, 9 rolled out this session, + 1 additional file `PMLifecycleAndSeamTest.cpp` discovered mid-run to share the same root cause).
+- Also suppressed `PMLifecycleAndSeamTest.cpp` TC4 double-EndPlay — UE 5.7 added `check(bHasBegunPlay)` to `UActorComponent::EndPlay` (`ActorComponent.cpp:1629`) which aborts the whole automation session on double-call.
+- Automation result: **119/122 = 97.5% pass rate** (baseline ~57%).
+- Three legitimate residuals documented at `production/qa/evidence/s1-04-harness-fix-evidence.md`: R1 slip-cue expiry drift, R2 test staleness vs Story-007-complete, R3 delegate-unbind leak on nulled RSMSubsystem cache pointer.
+- **AC met**: ≥85% pass rate + ≤5 residuals.
+
+S1-08 + S1-09 + S1-10 now unblocked.
 
 ### Sprint 1 status
 
-Sprint plan at `production/sprints/sprint-1.md`; QA plan at `production/qa/qa-plan-sprint-1-2026-08-08.md`. Sprint is housekeeping-heavy (7 of 10 tasks are commits/docs). Three tasks carry real QA scope: S1-04, S1-06, S1-09.
+Sprint plan at `production/sprints/sprint-1.md`; QA plan at `production/qa/qa-plan-sprint-1-2026-08-08.md`.
 
-- **S1-04**: Integration test harness fix (`CreateTestPlayWorld` — RSMSubsystem-null in test PIE world). WIP visible in 10 unstaged test-file `#include` additions. Blocks S1-08 + S1-09 + S1-10.
-- **S1-06**: PEAT/Harding FPA gate for commitment-tell + AC-COMMIT-FLASH-ENABLED accessibility shim (deferred R12a-PENDING items from Story 010).
-- **S1-09**: Sequential Setup B → Setup D watchdog integration test (~210-tick real latency; QA-S1 follow-up filed at Story 013 close).
+- **S1-04** — DONE (`fa03f32`).
+- **S1-05** — DONE (`91f4c4c`) — ADR-0011 committed as **Proposed**. Meets AC (sprint-1.md:24 allows Proposed). Promotion to Accepted deferred until ADR-0005 lands (blocked on Foundation HW-verification at ADR-0001) or a pragmatic-promotion architecture-review pass.
+- **S1-06** (PEAT/Harding FPA evidence + art-director sign-off, R12a-PENDING) — not started.
+- **S1-07** (UE-S1 ADR-0009 IG-3 carve-out annotation at `PLMC.h:121`) — not started; 15-min task.
+- **S1-08** (`/architecture-review` PM downstream consumers) — unblocked, not started.
+- **S1-09** (sequential Setup B → Setup D watchdog integration test) — unblocked, not started.
+- **S1-10** (runtime-verification runbook `docs/tests-headless.md`) — unblocked, not started.
 
 ### Follow-ups filed (not blocking)
 
-1. **Build-verify foundation-to-build commit** (`02654f2`) — run `Build/BatchFiles/RunUAT.sh` or in-editor build to confirm fresh clone builds before starting the next epic.
-2. **Runtime-verification runbook** (S1-10) — `docs/tests-headless.md` documenting canonical headless `UnrealEditor-Cmd` invocation + how to register new categories.
-3. **QA-S1** (S1-09) — sequential Setup B → Setup D watchdog integration test. Recommended before Wave Spawner subscriber ships to CI.
-4. **UE-S1** — ADR-0009 IG-3 outbound-binding carve-out annotation at `PLMC.h:121`.
+1. **Build-verify foundation-to-build commit** (`02654f2`) — run `Build/BatchFiles/RunUAT.sh` or in-editor build to confirm fresh clone builds before starting the next epic. **PARTIAL PROGRESS 2026-08-10/12**: `SLIPSTORMEditor` target confirmed to build fresh via `Build/BatchFiles/Mac/Build.sh` during S1-04 verification. Full RunUAT / Shipping-target validation still pending.
+2. **Runtime-verification runbook** (S1-10) — as above.
+3. **QA-S1** (S1-09) — as above.
+4. **UE-S1** (S1-07) — as above.
 5. **`docs/architecture/control-manifest.md`** — does not exist yet; referenced by `/story-done` manifest-staleness check (currently skipped).
-6. **`directory-structure.md` doc drift** — states `production/session-state/active.md` is gitignored, but the file is tracked (prior story-close commits committed it, and this session's rewrite continues the tracked convention). Either update the doc or `git rm --cached` the file.
+6. **`directory-structure.md` doc drift** — states `production/session-state/active.md` is gitignored, but the file is tracked. Either update the doc or `git rm --cached` the file.
+7. **S1-04 residuals** — R1 (bug candidate), R2 (test stale), R3 (bug candidate), plus TC4-g double-EndPlay AC deprecated for UE 5.7. Documented at `production/qa/evidence/s1-04-harness-fix-evidence.md`.
 
 ### Next recommended
 
-1. **`/architecture-review` PM downstream consumers** (Sprint 1 S1-08) — close ADR-0005 forward contract, verify Wave Spawner R11a-8 grace-window binding + HUD banner subscriber wire to `OnHardwarePerformanceBreach`. Natural Player Movement epic-close follow-on; blocked-by S1-04 + S1-05.
-2. **Complete S1-04 harness fix** — unblocks S1-08 + S1-09 + S1-10.
-3. **Start Wave Spawner epic** — obvious next downstream consumer of PM (already referenced in Story 013 follow-ups + ADR-0005). Would need `/create-stories wave-spawner`.
+1. **S1-08** — `/architecture-review` PM downstream consumers. Now fully unblocked (S1-04 + S1-05 both done). Natural PM epic-close follow-on. Will surface any ADR-0011 amendments needed to close Wave Spawner R11a-8 grace-window binding.
+2. **S1-07** — 15-min UE-S1 follow-up (ADR-0009 IG-3 annotation at `PLMC.h:121`). Quick housekeeping win — good warm-up or batch with S1-08.
+3. **S1-06** — Story-010 PEAT/Harding FPA evidence + art-director sign-off. R12a-PENDING carryover; 0.5-day estimate; no dependencies.
+4. **Wave Spawner epic** — `/create-epics wave-spawner` is now technically unblocked by ADR-0011 Proposed, but epic-Done gates on ADR-0010 (Pull-Wave lifecycle, not yet authored — see ADR-0011 Risks table). Do NOT start story authoring until ADR-0010 lands.
