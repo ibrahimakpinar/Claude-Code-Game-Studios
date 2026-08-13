@@ -119,6 +119,7 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnHardwarePerformanceBreach, bool);
  *   - Lean via SetRelativeRotation on mesh only — SetActorRotation is FORBIDDEN
  *     [Forbidden pattern: PlayerMovement_SetActorRotation_for_lean]
  *   - AddUObject bindings only — no AddRaw, no lambda bindings (ADR-0009 IG-3)
+ *     [IG-3 scope: PM's outbound runtime bindings only; test-scope lambdas exempt]
  */
 UCLASS(ClassGroup=(SLIPSTORM), meta=(BlueprintSpawnableComponent))
 class SLIPSTORM_API UPlayerLaneMovementComponent : public UActorComponent
