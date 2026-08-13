@@ -44,6 +44,7 @@ Evaluate against the Design Document Standard checklist:
 - [ ] Has Tuning Knobs section (configurable values identified)
 - [ ] Has Acceptance Criteria section (testable success conditions)
 
+<<<<<<< HEAD
 ### Phase 2b: Seam-Doc Grep (paper-only-interface detection)
 
 **Why this step exists**: Three historical DPC reviews (R3, R5, R7 on 2026-06-04 through 2026-06-06) found the same failure class — the GDD references interfaces (`IRSMTestStub`, `FConsumerTestStub.bIsActiveRisingEdgeObserved`, `IDPCAbortDelegate`, `IWaveSpawnerPoolMetadataProvider`, `ICurveProvider`) that exist by name in the GDD's ACs but are NOT authored in `docs/architecture/platform-seam-interfaces.md`. The ACs that reference paper-only interfaces are unimplementable until the seams are written. This step catches the failure at design-review time on every GDD, not retroactively after specialist reviews surface it.
@@ -70,6 +71,8 @@ Evaluate against the Design Document Standard checklist:
 
 **Why this lives at Phase 2 and not Phase 3b**: specialist agents in Phase 3b also find these gaps (qa-lead has historically caught them), but they find them after spending review tokens. Catching at Phase 2 is faster and cheaper, and means specialists' attention is freed for genuinely-domain-specific findings.
 
+=======
+>>>>>>> myorigin/main
 ---
 
 ## Phase 3: Consistency and Implementability

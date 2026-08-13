@@ -55,6 +55,7 @@ if [ -d "src" ]; then
 fi
 
 # --- Active session state recovery ---
+<<<<<<< HEAD
 # Preview only — do NOT instruct a full-file read. Large state files can push
 # a session into the long-context tier and burn credits. Reference on demand.
 STATE_FILE="production/session-state/active.md"
@@ -68,6 +69,22 @@ if [ -f "$STATE_FILE" ]; then
     echo ""
     tail -20 "$STATE_FILE" 2>/dev/null
     echo "=== END PREVIEW ==="
+=======
+STATE_FILE="production/session-state/active.md"
+if [ -f "$STATE_FILE" ]; then
+    echo ""
+    echo "=== ACTIVE SESSION STATE DETECTED ==="
+    echo "A previous session left state at: $STATE_FILE"
+    echo "Read this file to recover context and continue where you left off."
+    echo ""
+    echo "Quick summary (last 20 lines):"
+    tail -20 "$STATE_FILE" 2>/dev/null
+    TOTAL_LINES=$(wc -l < "$STATE_FILE" 2>/dev/null)
+    if [ "$TOTAL_LINES" -gt 20 ]; then
+        echo "  ... ($TOTAL_LINES total lines — read the full file to continue)"
+    fi
+    echo "=== END SESSION STATE PREVIEW ==="
+>>>>>>> myorigin/main
 fi
 
 echo "==================================="

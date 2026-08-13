@@ -37,7 +37,11 @@
 #   Each entry: name, status, source, referenced_by[], attributes{}, added, revised
 
 version: 1
+<<<<<<< HEAD
 last_updated: "2026-06-23"  # /propagate-design-change pass (2026-06-23) — Wave Spawner R3a closure: added `design/gdd/wave-spawner-pattern-library.md` to `referenced_by` lists of 4 registry constants Wave Spawner is now a direct consumer of (BARRAGE_SIMULTANEITY_WINDOW_S per qa-lead R3 finding; TELEGRAPH_WINDOW_FLOOR_S per Rule 6 + Rule 15 NON_BARRAGE_STAGGER + F-6/F-7/F-8; TELEGRAPH_WINDOW_FLOOR_MAX_ADMISSIBLE_S per Rule 15 + F-7 + AC-WS-21; MAX_CONCURRENT_WAVES_CAP per F-2 + AC-WS-09 + G.2). No registry value changes; only `referenced_by` consumer-list updates. Pull-Wave + DPC R14-closed cascade unaffected. /propagate-design-change pass (2026-06-19) — R13/R14 closure cascade: BARRAGE_SIMULTANEITY_WINDOW_S value flipped 0.3 → 0.35s (restores FLOOR/2 design ratio at FLOOR=0.70s; R11a-arithmetic hold-condition "DPC R-Updated re-review confirmation" satisfied by R14 APPROVED 2026-06-19; cross-system survivability invariant unaffected — W is simultaneity window, not escape budget); NEW constant TELEGRAPH_WINDOW_FLOOR_MAX_ADMISSIBLE_S = 0.76s codified as derived ceiling under Constraint A (OPENER_key ≤ 1.0s ⇒ FLOOR ≤ 0.76s under Path B); both DPC line 944 + Pull-Wave line 535 oracle sites updated lock-step per ADR-0004 dual-grep methodology; DPC line 717 "FLAGGED FOR CD POST-PASS REVIEW" prose retired (CD R12 Ruling 1 ratified Path B). R11a-arithmetic cross-doc propagation pass (2026-06-18) — TELEGRAPH_WINDOW_FLOOR_S raised 0.65 → 0.70s per Pull-Wave R10d CD PATH (i) ruling (2026-06-17); BARRAGE_SIMULTANEITY_WINDOW_S derivation target updated 0.325 → 0.35s. Both entries' notes restructured to retire R9-coordination "FLOOR stays at 0.65s" framing; R10d resolution now canonical. Pull-Wave R10b measurement sub-pass (2026-06-16) — LeanEaseCurve_Canonical interpolation_mode (RCIM_Cubic) + tangent_mode (RCTM_Auto) pinned per R9 systems-designer F1; was implicit in fingerprint targets at t=0.25→0.038, now binding metadata; cook-time fingerprint check extended with interpolation-metadata verification (check #2). R7 (2026-06-10), R6 B3 (2026-06-08), and earlier R4 RC-R3 entries preserved below. // R7 in-session revision pass (cluster-based, 13 BLOCKING + 1 contingent across 5 root-cause classes): R7 B6 LEAN_ANGLE_MIN_TIER_GAP_DEG=3.0 added + TIER3 upper tightened 27→25 + TIER4 lower tightened 25→28; R7 B7 LeanEaseCurve_Canonical registry-canonical asset reference added; R7 B6/B7 AC-PW-22b sub-patterns 7e-7h + 12 added. R6 B3 LEAN_BRIGHTNESS_PEAK_RATIO safe range tightened [1.5, 2.2] → [1.7, 2.2] preserved.
+=======
+last_updated: ""
+>>>>>>> myorigin/main
 
 # ─── ENTITIES ────────────────────────────────────────────────────────────────
 # Named game-world objects: enemies, NPCs, characters, factions, bosses.
@@ -139,6 +143,7 @@ formulas: []
 #
 # Required fields: name, status, source, referenced_by, value, unit, added
 
+<<<<<<< HEAD
 constants:
   - name: TELEGRAPH_WINDOW_FLOOR_S
     status: provisional
@@ -981,6 +986,9 @@ constants:
       Cannot be revised without re-verifying F-BARRAGE-SURVIVABILITY-INVARIANT.
     added: 2026-06-08
     revised: "2026-06-11"
+=======
+constants: []
+>>>>>>> myorigin/main
 
 # Example:
 #

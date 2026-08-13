@@ -29,8 +29,13 @@
 #   All forbidden patterns: Grep pattern="^  - pattern:" (forbidden_patterns section)
 #   Superseded entries:     Grep pattern="status: superseded"
 
+<<<<<<< HEAD
 version: 8
 last_updated: "2026-07-03"  # v7→v8: ADR-0009 (Player Movement Component Hosting, Forward-Motion Model, Tween Implementation) authored. Two new forbidden_patterns added — (1) PlayerMovement_SetActorRotation_for_lean forbids applying body/head/arm lean via AActor::SetActorRotation on the pawn root (breaks mechanics Rule 2 collision commitment since collision geometry rotates with the root; lean MUST target the mesh component's local transform via MeshComponent->SetRelativeRotation); (2) PlayerMovement_TickComponent_without_prior_ForceTickNow forbids UPlayerLaneMovementComponent::TickComponent body executing without RSMSubsystem->ForceTickNow() as first statement after check(IsInGameThread()) — mirrors the ADR-0008 pattern for UDPCController::Tick and closes the stale-RSM-state hazard (F-2 effective_slip_tween clamp check + F-6 timer advance corrupt against stale current_state / remaining_time). ADR-0009 bundles OQ-1 (PM object type — UActorComponent) + OQ-2 (Tween implementation + Forward Motion Option (c) stationary-player). Pawn class name ASlipstormPlayerPawn is a NEW binding introduced by this ADR — no prior design/architecture doc named the pawn class. [Prior v6→v7: INT-006 amendment — ADR-0007 Initialize() salt-parse switched from FParse::HexNumber64(*SaltHex, Salt) bool+out-param call to FCString::Strtoui64(*SaltHex, nullptr, 16) value-return after UE 5.7 Misc/Parse.h primary-source verification confirmed FParse::HexNumber64 has a FStringView value-return signature in 5.7 incompatible with the original call AND incompatible with LLM-window 5.3 (const TCHAR*, TCHAR**) form; FCString::Strtoui64 chosen as cross-version-stable fallback; api: string at salt_storage_for_runseed updated FParse::HexNumber64 → FCString::Strtoui64; no new forbidden pattern added — INT-006 was a one-off LLM hallucination about an unstable API surface, not a generalizable forbidden class; closes last open surgical fix from architecture-review-2026-06-26; ADR-0007 fully unblocked for Proposed → Accepted gate.] [Prior v5→v6: INT-005 amendment — RunStateMachine_Tick_set_bHasTickedThisFrame_without_prior_guard forbidden pattern added; ADR-0007 Tick() body skeleton gains FIRST-STATEMENT bHasTickedThisFrame guard mirroring ForceTickNow() guard; Implementation Guideline 5 + Risk 4 mitigation row + Validation Criteria item + Tick body diagram + Key Interfaces flag comment rephrased "set as FIRST STATEMENT" → "guarded then set"; closes architecture-review-2026-06-26 BLOCKING Risk 4 mitigation code/prose contradiction.]
+=======
+version: 1
+last_updated: ""
+>>>>>>> myorigin/main
 
 # ─── STATE OWNERSHIP ─────────────────────────────────────────────────────────
 # Who is the authoritative owner of each piece of shared game state.
@@ -43,6 +48,7 @@ last_updated: "2026-07-03"  # v7→v8: ADR-0009 (Player Movement Component Hosti
 # interface: how other systems access this state (read-only property, method call,
 #   signal, shared resource, etc.) — this is the contract other ADRs depend on.
 
+<<<<<<< HEAD
 state_ownership:
   - state: run_current_state
     status: active
@@ -123,6 +129,9 @@ state_ownership:
       - docs/architecture/adr-0005-wave-spawner-subsystem-hosting.md  # Wave Spawner R2a-2 + R3a FC-3 consumer
     added: 2026-06-26
     revised: ""
+=======
+state_ownership: []
+>>>>>>> myorigin/main
 
 # Example:
 #
@@ -150,6 +159,7 @@ state_ownership:
 #
 # pattern options: signal | direct_call | event_bus | shared_resource | rpc | none
 
+<<<<<<< HEAD
 interfaces:
   - contract: touch_radius_access
     status: active
@@ -261,6 +271,9 @@ interfaces:
       - design/gdd/difficulty-phase-controller.md
     added: 2026-06-26
     revised: ""
+=======
+interfaces: []
+>>>>>>> myorigin/main
 
 # Example:
 #
@@ -289,6 +302,7 @@ interfaces:
 # Register a budget when an ADR explicitly claims a frame time allocation.
 # The registry lets /architecture-review verify the total doesn't exceed the target.
 
+<<<<<<< HEAD
 performance_budgets:
   - system: input-system-touch-radius-cache
     status: active
@@ -345,6 +359,9 @@ performance_budgets:
       - docs/architecture/adr-0008-dpc-subsystem-hosting.md
     added: 2026-06-26
     revised: ""
+=======
+performance_budgets: []
+>>>>>>> myorigin/main
 
 # Example:
 #
@@ -375,6 +392,7 @@ performance_budgets:
 # Register an API decision when the choice is non-obvious and other ADRs might
 # make a different choice for the same purpose without knowing this was decided.
 
+<<<<<<< HEAD
 api_decisions:
   - purpose: mobile_touch_contact_radius
     status: active
@@ -537,6 +555,9 @@ api_decisions:
       - docs/architecture/adr-0007-run-state-machine-hosting.md
     added: 2026-06-26
     revised: ""
+=======
+api_decisions: []
+>>>>>>> myorigin/main
 
 # Example:
 #
@@ -562,6 +583,7 @@ api_decisions:
 # Register a pattern when an ADR explicitly bans it AND other ADRs might
 # unknowingly use it (i.e., it's a tempting but wrong approach for this project).
 
+<<<<<<< HEAD
 forbidden_patterns:
   - pattern: engine_source_modification_for_touch_radius
     status: active
@@ -779,6 +801,9 @@ forbidden_patterns:
     why: "Without the ForceTickNow prologue, PM reads stale RSM.current_state / RSM.remaining_time — up to one frame stale under unfavorable engine tick scheduling (UE 5.7 does not guarantee an ordering between UActorComponent::TickComponent on the player pawn and URunStateMachineSubsystem::Tick as an FTickableGameObject on a UGameInstanceSubsystem — AddTickPrerequisiteComponent is not available for subsystem targets per platform §3 Tick Ordering). F-2's effective_slip_tween clamp check + F-6 timer advance both silently corrupt against stale RSM state. RSM's bHasTickedThisFrame guard (INT-005-amended 2026-06-26) makes ForceTickNow idempotent within-frame — the call is safe even if DPC or engine already ticked RSM this frame; PM's call short-circuits under the idempotence guard. The canonical (c) pull-primitive pattern supersedes platform §3 lines 57–64 pre-ADR-0007 options (a) one-frame-lag + (b) manual TickComponent from RSM."
     adr: docs/architecture/adr-0009-player-movement-hosting.md
     added: 2026-07-03
+=======
+forbidden_patterns: []
+>>>>>>> myorigin/main
 
 # Example:
 #

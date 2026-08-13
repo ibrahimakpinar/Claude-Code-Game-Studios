@@ -24,6 +24,7 @@
 #
 # STATUS VALUES: active | deprecated | superseded-by: TR-[system]-NNN
 
+<<<<<<< HEAD
 version: 2
 last_updated: "2026-06-26"
 # 2026-06-26: /architecture-review re-validation pass — no new TRs added. ADR-0007 + ADR-0008
@@ -1719,3 +1720,35 @@ requirements:
     created: 2026-06-25
     revised: ""
     status: active
+=======
+version: 1
+last_updated: ""
+
+requirements: []
+
+# --- EXAMPLE ENTRIES (remove when first real entries are added) ---
+#
+# - id: TR-combat-001
+#   system: combat
+#   gdd: design/gdd/combat-system.md
+#   requirement: "Player takes damage from enemies based on attack power minus defence"
+#   created: 2026-03-10
+#   revised: ""
+#   status: active
+#
+# - id: TR-combat-002
+#   system: combat
+#   gdd: design/gdd/combat-system.md
+#   requirement: "Combo window timing is 0.4 seconds between hits"
+#   created: 2026-03-10
+#   revised: "2026-04-01"
+#   status: active
+#
+# - id: TR-combat-003
+#   system: combat
+#   gdd: design/gdd/combat-system.md
+#   requirement: "Old damage formula using raw stats"
+#   created: 2026-03-10
+#   revised: ""
+#   status: superseded-by: TR-combat-001
+>>>>>>> myorigin/main
