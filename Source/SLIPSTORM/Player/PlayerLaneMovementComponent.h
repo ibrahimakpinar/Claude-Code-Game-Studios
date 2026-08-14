@@ -402,6 +402,11 @@ public:
      *  Story 013. */
     friend class FPMWatchdogTest;
 
+    /** Grants FPMWatchdogIntegrationTest access to the same watchdog surface as
+     *  FPMWatchdogTest — sequential Setup B → Setup D release-latency chain via
+     *  live PM in a real EWorldType::Game world. S1-09. */
+    friend class FPMWatchdogIntegrationTest;
+
     /** Test-only: increments once per LeadingFaceFlash SetScalarParameterValue call.
      *  Verifies cadence cap suppression by counting actual material writes vs
      *  the always-incrementing commitment_tell_fire_count. Story 010. */

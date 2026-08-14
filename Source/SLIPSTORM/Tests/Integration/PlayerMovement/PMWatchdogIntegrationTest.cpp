@@ -43,7 +43,7 @@
 // PMLifecycleAndSeamTest.cpp:82-109 for the full rationale + engine citation.
 // ---------------------------------------------------------------------------
 
-static UWorld* CreateTestPlayWorld(FAutomationTestBase* T, FTestWorldWrapper& WorldWrapper, const TCHAR* Label)
+static UWorld* CreateTestPlayWorld_WI(FAutomationTestBase* T, FTestWorldWrapper& WorldWrapper, const TCHAR* Label)
 {
     if (!WorldWrapper.CreateTestWorld(EWorldType::Game))
     {
@@ -103,7 +103,7 @@ bool FPMWatchdogIntegrationTest::RunTest(const FString& Parameters)
     if (Parameters == TEXT("sequential_b_to_d_release_latency"))
     {
         FTestWorldWrapper WorldWrapper;
-        UWorld* TestWorld = CreateTestPlayWorld(this, WorldWrapper, TEXT("TC1"));
+        UWorld* TestWorld = CreateTestPlayWorld_WI(this, WorldWrapper, TEXT("TC1"));
         if (!TestWorld)
         {
             return false;
