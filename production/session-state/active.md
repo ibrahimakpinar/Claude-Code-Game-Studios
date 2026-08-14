@@ -4,7 +4,7 @@
 
 Sprint 1 heavy-cleanup session. Started on `main` for S1-05; user switched to `mymerge` branch mid-session (post-`967de26`) after a merge from `myorigin/main` (commit `454e1b7`). All subsequent commits landed on `mymerge`.
 
-**6 stories closed, 12 commits** — Sprint 1 functionally closed (all 7 tracked stories DONE in some form):
+**6 stories closed, 14 commits** — Sprint 1 fully closed (all 7 tracked stories DONE; S1-09 verified via headless run):
 
 | Story | Commits | Result |
 |-------|---------|--------|
@@ -13,7 +13,7 @@ Sprint 1 heavy-cleanup session. Started on `main` for S1-05; user switched to `m
 | S1-08 | `10e6e4b` + `392f3d4` | TR-PM-022/023/024 downstream-consumer table + Cross-ADR Forward Contract Closure Log added to `requirements-traceability.md`. Skill invocation intentionally skipped (AC-narrow). Advisor consulted; direct edit was correct call. |
 | S1-10 | `fa1eccf` + `0d9097d` | 147-line runbook at `docs/tests-headless.md`: canonical invocation, flag-registration rule, world-setup rule, common pitfalls, add-new-category procedure. |
 | S1-06 | `26099e0` + `0331a1e` | **PARTIAL** — sprint AC reclassified from "formal PEAT run + sign-off" to "skeleton + design pre-check + Polish capture protocol" (I cannot run PEAT/Harding tooling or provide human sign-off). New 168-line evidence doc `production/qa/evidence/story-010-peat-evidence.md` documents design parameters, IEC 61966-2-2/Harding FPA/W3C-PEAT thresholds, reproduces GDD §4 F-COMMIT-CADENCE-CAP working-sketch pre-check (3.5 × 0.60 = 2.1 vs 6.0 heuristic → passes with 65% margin, PRELIMINARY not FORMAL), Polish capture protocol (Setup A/B/C), and empty sign-off table. |
-| S1-09 | `c61e44d` | **UNVERIFIED** — new `PMWatchdogIntegrationTest.cpp` (204 lines) + spec doc validating the sequential Setup B → Setup D release-latency chain that the unit test at `PMWatchdogTest.cpp:335-338` explicitly defers to integration. Test asserts design invariants (broadcast count/ordering + release-tick range `[180, 260]`) rather than exact tick count. Not compiled/run in this environment — a headless run per `docs/tests-headless.md` is the verification step. |
+| S1-09 | `c61e44d` + `a06c199` | **VERIFIED** — new `PMWatchdogIntegrationTest.cpp` + spec doc validating the sequential Setup B → Setup D release-latency chain that the unit test at `PMWatchdogTest.cpp:335-338` explicitly defers to integration. Test asserts design invariants (broadcast count/ordering + release-tick range `[180, 260]`) rather than exact tick count. Build fix (`a06c199`) added friend decl + renamed unity-colliding helper. Headless run: **1 test found, Result: Success, exit code 0**. |
 
 **Session hygiene**:
 - Advisor consulted twice — before S1-08 (skill invocation vs targeted edit) and (implicitly) before S1-06 scope decision.
@@ -24,13 +24,13 @@ Sprint 1 heavy-cleanup session. Started on `main` for S1-05; user switched to `m
 
 ### Sprint 1 final status (as of 2026-08-14 EOD)
 
-**DONE (7/7 tracked)**: S1-04, S1-05, S1-06 (partial per §8 Polish-deferral), S1-07, S1-08, S1-09 (unverified — headless run pending), S1-10. **Sprint 1 is functionally closed.**
+**DONE (7/7 tracked)**: S1-04, S1-05, S1-06 (partial per §8 Polish-deferral), S1-07, S1-08, **S1-09 (VERIFIED — headless pass)**, S1-10. **Sprint 1 is fully closed.**
 
 ### Next-session recommendation
 
-1. **Verify S1-09** — headless-run `PMWatchdogIntegrationTest` per `docs/tests-headless.md` to confirm the range assertion `[180, 260]` holds against real code. If it fails, either the range needs tuning or the code has drift.
-2. **Follow-up #1** (RunUAT build-verify) still partial — worth completing before starting the next epic.
-3. **ADR-0010 (Pull-Wave) authoring** — larger task; would unblock the Wave Spawner epic. Good next-epic-open session start.
+1. **ADR-0010 (Pull-Wave) authoring** — gates the Wave Spawner epic. `/architecture-decision` entry point. Only substantive remaining work — S1-06's Polish-deferred sign-offs need a human anyway.
+2. **Follow-up #1** (RunUAT build-verify) still partial — Shipping-target validation pending; `SLIPSTORMEditor` build confirmed today (S1-09 verification triggered fresh build).
+3. **S1-04 residuals** (R1 slip-cue expiry drift, R2 test staleness, R3 delegate-unbind leak) — file bug reports if not already done.
 
 ### Branch state
 
@@ -100,7 +100,7 @@ Sprint plan at `production/sprints/sprint-1.md`; QA plan at `production/qa/qa-pl
 - **S1-06** — DONE-PARTIAL (`26099e0`) — sprint AC reclassified from "formal PEAT run + sign-off" to "skeleton + design pre-check + Polish capture protocol"; new evidence doc at `production/qa/evidence/story-010-peat-evidence.md` (168 lines). Formal Harding FPA / W3C-PEAT tool run remains a Polish-phase task per presentation §8 (external tool + video capture required; art-director / accessibility-specialist sign-off is a human decision). Cross-link added to existing commitment-tell evidence doc.
 - **S1-07** — DONE (`b26c6e8`) — one-line IG-3 scope carve-out annotation added at `PlayerLaneMovementComponent.h:122`.
 - **S1-08** — DONE (`10e6e4b`) — TR-PM-022/023/024 downstream-consumer table + Cross-ADR Forward Contract Closure Log added to `requirements-traceability.md`. Skill invocation intentionally skipped (AC-narrow scope, targeted edit sufficient). Wave Spawner row-level status refresh deferred to a future full `/architecture-review` pass.
-- **S1-09** — DONE (`c61e44d`) — new `PMWatchdogIntegrationTest.cpp` (204 lines) + spec doc. TC verifies design invariants (broadcast count + ordering + release latency in [180, 260] range). **UNVERIFIED** — test not compiled/run in this environment; recommended next step is a headless run per `docs/tests-headless.md`.
+- **S1-09** — DONE + **VERIFIED** (`c61e44d` + `a06c199`) — new `PMWatchdogIntegrationTest.cpp` + spec doc. TC verifies design invariants (broadcast count + ordering + release latency in [180, 260] range). Build fix commit added `friend class FPMWatchdogIntegrationTest;` to PLMC.h + renamed helper to `CreateTestPlayWorld_WI` (unity-build collision). Headless run: 1 test found, Result: Success, exit code 0.
 - **S1-10** — DONE (`fa1eccf`) — 147-line runbook at `docs/tests-headless.md` covering canonical invocation, flag-registration rule, world-setup rule, common pitfalls, and how to add new test categories.
 
 ### Follow-ups filed (not blocking)
