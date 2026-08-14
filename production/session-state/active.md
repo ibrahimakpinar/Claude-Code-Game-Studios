@@ -1,5 +1,44 @@
 # Session State
 
+## Handoff — 2026-08-14
+
+Sprint 1 heavy-cleanup session. Started on `main` for S1-05; user switched to `mymerge` branch mid-session (post-`967de26`) after a merge from `myorigin/main` (commit `454e1b7`). All subsequent commits landed on `mymerge`.
+
+**5 stories closed, 10 commits**:
+
+| Story | Commits | Result |
+|-------|---------|--------|
+| S1-05 | `91f4c4c` + `967de26` | ADR-0011 Wave Spawner Pattern Library committed as **Proposed** (437 lines). Meets AC. Accepted-promotion deferred until ADR-0005 lands or pragmatic-promotion review. |
+| S1-07 | `b26c6e8` + `f988f4e` | One-line ADR-0009 IG-3 scope carve-out annotation at `PlayerLaneMovementComponent.h:122`. |
+| S1-08 | `10e6e4b` + `392f3d4` | TR-PM-022/023/024 downstream-consumer table + Cross-ADR Forward Contract Closure Log added to `requirements-traceability.md`. Skill invocation intentionally skipped (AC-narrow). Advisor consulted; direct edit was correct call. |
+| S1-10 | `fa1eccf` + `0d9097d` | 147-line runbook at `docs/tests-headless.md`: canonical invocation, flag-registration rule, world-setup rule, common pitfalls, add-new-category procedure. |
+| S1-06 | `26099e0` + `0331a1e` | **PARTIAL** — sprint AC reclassified from "formal PEAT run + sign-off" to "skeleton + design pre-check + Polish capture protocol" (I cannot run PEAT/Harding tooling or provide human sign-off). New 168-line evidence doc `production/qa/evidence/story-010-peat-evidence.md` documents design parameters, IEC 61966-2-2/Harding FPA/W3C-PEAT thresholds, reproduces GDD §4 F-COMMIT-CADENCE-CAP working-sketch pre-check (3.5 × 0.60 = 2.1 vs 6.0 heuristic → passes with 65% margin, PRELIMINARY not FORMAL), Polish capture protocol (Setup A/B/C), and empty sign-off table. |
+
+**Session hygiene**:
+- Advisor consulted twice — before S1-08 (skill invocation vs targeted edit) and (implicitly) before S1-06 scope decision.
+- Advisor's core guidance validated: "The full-skill Opus invocation is the wrong default here — AC is scoped narrowly enough that the skill would do 10× the work the sprint asks for." Applied to S1-08.
+- Every commit follows Conventional Commits + Story-ID reference.
+
+**Working tree**: clean.
+
+### Sprint 1 final status (as of 2026-08-14 EOD)
+
+**DONE (6/7 tracked)**: S1-04, S1-05, S1-06 (partial), S1-07, S1-08, S1-10. **REMAINING**: S1-09 only (nice-to-have watchdog integration test). All Must-Have + Should-Have landed in some form.
+
+### Next-session recommendation
+
+1. **S1-09** — the only remaining Sprint 1 story. 0.5 day, actual test-code work; S1-10 runbook (`docs/tests-headless.md`) is now available as reference.
+2. **ADR-0010 (Pull-Wave) authoring** — larger task; would unblock the Wave Spawner epic. Would be a good next-epic-open session start.
+3. **Follow-up #1** (RunUAT build-verify) is still partial — worth completing before starting the next epic.
+
+### Branch state
+
+- `mymerge` — where this session's work landed (+ prior `454e1b7` merge from `myorigin/main`).
+- `main` — has S1-05's two commits (`91f4c4c` + `967de26`) but NOT the S1-07/S1-08/S1-10/S1-06 commits from `mymerge`.
+- Reconciliation between `main` and `mymerge` is a user decision — not attempted this session.
+
+---
+
 ## Handoff — 2026-08-09
 
 Full prior session history archived: `production/session-logs/active-archive-2026-08-09.md` (240 lines, spans 2026-08-01 through 2026-08-07 sessions).
