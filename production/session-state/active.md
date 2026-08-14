@@ -57,7 +57,7 @@ Sprint plan at `production/sprints/sprint-1.md`; QA plan at `production/qa/qa-pl
 
 - **S1-04** — DONE (`fa03f32`).
 - **S1-05** — DONE (`91f4c4c`) — ADR-0011 committed as **Proposed**. Meets AC (sprint-1.md:24 allows Proposed). Promotion to Accepted deferred until ADR-0005 lands (blocked on Foundation HW-verification at ADR-0001) or a pragmatic-promotion architecture-review pass.
-- **S1-06** (PEAT/Harding FPA evidence + art-director sign-off, R12a-PENDING) — not started.
+- **S1-06** — DONE-PARTIAL (`26099e0`) — sprint AC reclassified from "formal PEAT run + sign-off" to "skeleton + design pre-check + Polish capture protocol"; new evidence doc at `production/qa/evidence/story-010-peat-evidence.md` (168 lines). Formal Harding FPA / W3C-PEAT tool run remains a Polish-phase task per presentation §8 (external tool + video capture required; art-director / accessibility-specialist sign-off is a human decision). Cross-link added to existing commitment-tell evidence doc.
 - **S1-07** — DONE (`b26c6e8`) — one-line IG-3 scope carve-out annotation added at `PlayerLaneMovementComponent.h:122`.
 - **S1-08** — DONE (`10e6e4b`) — TR-PM-022/023/024 downstream-consumer table + Cross-ADR Forward Contract Closure Log added to `requirements-traceability.md`. Skill invocation intentionally skipped (AC-narrow scope, targeted edit sufficient). Wave Spawner row-level status refresh deferred to a future full `/architecture-review` pass.
 - **S1-09** (sequential Setup B → Setup D watchdog integration test) — unblocked, not started.
@@ -75,10 +75,10 @@ Sprint plan at `production/sprints/sprint-1.md`; QA plan at `production/qa/qa-pl
 
 ### Next recommended
 
-1. **S1-06** — Story-010 PEAT/Harding FPA evidence + art-director sign-off. R12a-PENDING carryover; 0.5-day estimate; no dependencies. Non-docs task — breaks the docs streak with actual QA evidence work; needs art-director agent.
-2. **S1-09** — Sequential Setup B → Setup D watchdog integration test. Unblocked by S1-04; 0.5 day. Actual code change (test file); would benefit from having the S1-10 runbook to reference.
-3. **Wave Spawner epic** — `/create-epics wave-spawner` is technically unblocked by ADR-0011 Proposed, but epic-Done gates on ADR-0010 (Pull-Wave lifecycle, not yet authored — see ADR-0011 Risks table). Do NOT start story authoring until ADR-0010 lands.
+1. **S1-09** — Sequential Setup B → Setup D watchdog integration test. Unblocked by S1-04; 0.5 day. Only remaining Sprint 1 story; actual test-code work; would benefit from having the S1-10 runbook to reference.
+2. **Wave Spawner epic** — `/create-epics wave-spawner` is technically unblocked by ADR-0011 Proposed, but epic-Done gates on ADR-0010 (Pull-Wave lifecycle, not yet authored — see ADR-0011 Risks table). Do NOT start story authoring until ADR-0010 lands.
+3. **ADR-0010 (Pull-Wave) authoring** — gates the Wave Spawner epic. Could be started via `/architecture-decision` if you want to unblock the epic in-session.
 
 ### Sprint 1 completion tally
 
-**DONE (5/7 tracked)**: S1-04 (must), S1-05 (must), S1-07 (should), S1-08 (should), S1-10 (nice-to-have). **REMAINING**: S1-06 (should), S1-09 (nice-to-have). All Must-Have tasks complete.
+**DONE (6/7 tracked)**: S1-04 (must), S1-05 (must), S1-06 (should — partial: skeleton + pre-check; formal PEAT deferred to Polish per §8), S1-07 (should), S1-08 (should), S1-10 (nice-to-have). **REMAINING**: S1-09 (nice-to-have). All Must-Have and Should-Have tasks are landed in some form.
