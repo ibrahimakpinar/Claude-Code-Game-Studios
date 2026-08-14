@@ -4,7 +4,7 @@
 
 Sprint 1 heavy-cleanup session. Started on `main` for S1-05; user switched to `mymerge` branch mid-session (post-`967de26`) after a merge from `myorigin/main` (commit `454e1b7`). All subsequent commits landed on `mymerge`.
 
-**5 stories closed, 10 commits**:
+**6 stories closed, 12 commits** — Sprint 1 functionally closed (all 7 tracked stories DONE in some form):
 
 | Story | Commits | Result |
 |-------|---------|--------|
@@ -13,6 +13,7 @@ Sprint 1 heavy-cleanup session. Started on `main` for S1-05; user switched to `m
 | S1-08 | `10e6e4b` + `392f3d4` | TR-PM-022/023/024 downstream-consumer table + Cross-ADR Forward Contract Closure Log added to `requirements-traceability.md`. Skill invocation intentionally skipped (AC-narrow). Advisor consulted; direct edit was correct call. |
 | S1-10 | `fa1eccf` + `0d9097d` | 147-line runbook at `docs/tests-headless.md`: canonical invocation, flag-registration rule, world-setup rule, common pitfalls, add-new-category procedure. |
 | S1-06 | `26099e0` + `0331a1e` | **PARTIAL** — sprint AC reclassified from "formal PEAT run + sign-off" to "skeleton + design pre-check + Polish capture protocol" (I cannot run PEAT/Harding tooling or provide human sign-off). New 168-line evidence doc `production/qa/evidence/story-010-peat-evidence.md` documents design parameters, IEC 61966-2-2/Harding FPA/W3C-PEAT thresholds, reproduces GDD §4 F-COMMIT-CADENCE-CAP working-sketch pre-check (3.5 × 0.60 = 2.1 vs 6.0 heuristic → passes with 65% margin, PRELIMINARY not FORMAL), Polish capture protocol (Setup A/B/C), and empty sign-off table. |
+| S1-09 | `c61e44d` | **UNVERIFIED** — new `PMWatchdogIntegrationTest.cpp` (204 lines) + spec doc validating the sequential Setup B → Setup D release-latency chain that the unit test at `PMWatchdogTest.cpp:335-338` explicitly defers to integration. Test asserts design invariants (broadcast count/ordering + release-tick range `[180, 260]`) rather than exact tick count. Not compiled/run in this environment — a headless run per `docs/tests-headless.md` is the verification step. |
 
 **Session hygiene**:
 - Advisor consulted twice — before S1-08 (skill invocation vs targeted edit) and (implicitly) before S1-06 scope decision.
@@ -23,13 +24,13 @@ Sprint 1 heavy-cleanup session. Started on `main` for S1-05; user switched to `m
 
 ### Sprint 1 final status (as of 2026-08-14 EOD)
 
-**DONE (6/7 tracked)**: S1-04, S1-05, S1-06 (partial), S1-07, S1-08, S1-10. **REMAINING**: S1-09 only (nice-to-have watchdog integration test). All Must-Have + Should-Have landed in some form.
+**DONE (7/7 tracked)**: S1-04, S1-05, S1-06 (partial per §8 Polish-deferral), S1-07, S1-08, S1-09 (unverified — headless run pending), S1-10. **Sprint 1 is functionally closed.**
 
 ### Next-session recommendation
 
-1. **S1-09** — the only remaining Sprint 1 story. 0.5 day, actual test-code work; S1-10 runbook (`docs/tests-headless.md`) is now available as reference.
-2. **ADR-0010 (Pull-Wave) authoring** — larger task; would unblock the Wave Spawner epic. Would be a good next-epic-open session start.
-3. **Follow-up #1** (RunUAT build-verify) is still partial — worth completing before starting the next epic.
+1. **Verify S1-09** — headless-run `PMWatchdogIntegrationTest` per `docs/tests-headless.md` to confirm the range assertion `[180, 260]` holds against real code. If it fails, either the range needs tuning or the code has drift.
+2. **Follow-up #1** (RunUAT build-verify) still partial — worth completing before starting the next epic.
+3. **ADR-0010 (Pull-Wave) authoring** — larger task; would unblock the Wave Spawner epic. Good next-epic-open session start.
 
 ### Branch state
 
@@ -99,14 +100,14 @@ Sprint plan at `production/sprints/sprint-1.md`; QA plan at `production/qa/qa-pl
 - **S1-06** — DONE-PARTIAL (`26099e0`) — sprint AC reclassified from "formal PEAT run + sign-off" to "skeleton + design pre-check + Polish capture protocol"; new evidence doc at `production/qa/evidence/story-010-peat-evidence.md` (168 lines). Formal Harding FPA / W3C-PEAT tool run remains a Polish-phase task per presentation §8 (external tool + video capture required; art-director / accessibility-specialist sign-off is a human decision). Cross-link added to existing commitment-tell evidence doc.
 - **S1-07** — DONE (`b26c6e8`) — one-line IG-3 scope carve-out annotation added at `PlayerLaneMovementComponent.h:122`.
 - **S1-08** — DONE (`10e6e4b`) — TR-PM-022/023/024 downstream-consumer table + Cross-ADR Forward Contract Closure Log added to `requirements-traceability.md`. Skill invocation intentionally skipped (AC-narrow scope, targeted edit sufficient). Wave Spawner row-level status refresh deferred to a future full `/architecture-review` pass.
-- **S1-09** (sequential Setup B → Setup D watchdog integration test) — unblocked, not started.
+- **S1-09** — DONE (`c61e44d`) — new `PMWatchdogIntegrationTest.cpp` (204 lines) + spec doc. TC verifies design invariants (broadcast count + ordering + release latency in [180, 260] range). **UNVERIFIED** — test not compiled/run in this environment; recommended next step is a headless run per `docs/tests-headless.md`.
 - **S1-10** — DONE (`fa1eccf`) — 147-line runbook at `docs/tests-headless.md` covering canonical invocation, flag-registration rule, world-setup rule, common pitfalls, and how to add new test categories.
 
 ### Follow-ups filed (not blocking)
 
 1. **Build-verify foundation-to-build commit** (`02654f2`) — run `Build/BatchFiles/RunUAT.sh` or in-editor build to confirm fresh clone builds before starting the next epic. **PARTIAL PROGRESS 2026-08-10/12**: `SLIPSTORMEditor` target confirmed to build fresh via `Build/BatchFiles/Mac/Build.sh` during S1-04 verification. Full RunUAT / Shipping-target validation still pending.
 2. ~~**Runtime-verification runbook** (S1-10) — as above.~~ **DONE** in `fa1eccf`.
-3. **QA-S1** (S1-09) — as above.
+3. ~~**QA-S1** (S1-09) — as above.~~ **DONE** in `c61e44d` (UNVERIFIED — headless run pending).
 4. ~~**UE-S1** (S1-07) — as above.~~ **DONE** in `b26c6e8`.
 5. **`docs/architecture/control-manifest.md`** — does not exist yet; referenced by `/story-done` manifest-staleness check (currently skipped).
 6. **`directory-structure.md` doc drift** — states `production/session-state/active.md` is gitignored, but the file is tracked. Either update the doc or `git rm --cached` the file.
@@ -114,10 +115,11 @@ Sprint plan at `production/sprints/sprint-1.md`; QA plan at `production/qa/qa-pl
 
 ### Next recommended
 
-1. **S1-09** — Sequential Setup B → Setup D watchdog integration test. Unblocked by S1-04; 0.5 day. Only remaining Sprint 1 story; actual test-code work; would benefit from having the S1-10 runbook to reference.
-2. **Wave Spawner epic** — `/create-epics wave-spawner` is technically unblocked by ADR-0011 Proposed, but epic-Done gates on ADR-0010 (Pull-Wave lifecycle, not yet authored — see ADR-0011 Risks table). Do NOT start story authoring until ADR-0010 lands.
-3. **ADR-0010 (Pull-Wave) authoring** — gates the Wave Spawner epic. Could be started via `/architecture-decision` if you want to unblock the epic in-session.
+1. **Verify S1-09** — run `PMWatchdogIntegrationTest` headless per `docs/tests-headless.md`. Confirms the range assertion `[180, 260]` holds against real code. This is the S1-09 verification step deferred from writing.
+2. **Follow-up #1 (RunUAT build-verify)** — still partial (`SLIPSTORMEditor` target confirmed but Shipping-target unverified). Worth completing before next epic.
+3. **ADR-0010 (Pull-Wave) authoring** — gates the Wave Spawner epic. `/architecture-decision` is the entry point.
+4. **Wave Spawner epic** — `/create-epics wave-spawner` is technically unblocked by ADR-0011 Proposed, but epic-Done gates on ADR-0010 (see ADR-0011 Risks table).
 
 ### Sprint 1 completion tally
 
-**DONE (6/7 tracked)**: S1-04 (must), S1-05 (must), S1-06 (should — partial: skeleton + pre-check; formal PEAT deferred to Polish per §8), S1-07 (should), S1-08 (should), S1-10 (nice-to-have). **REMAINING**: S1-09 (nice-to-have). All Must-Have and Should-Have tasks are landed in some form.
+**DONE (7/7 tracked)**: S1-04 (must), S1-05 (must), S1-06 (should — partial: skeleton + pre-check; formal PEAT deferred to Polish per §8), S1-07 (should), S1-08 (should), S1-09 (nice-to-have — UNVERIFIED, headless run pending), S1-10 (nice-to-have). **All Sprint 1 stories landed in some form.** Sprint 1 is functionally closed.
