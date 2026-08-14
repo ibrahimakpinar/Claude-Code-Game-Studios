@@ -61,12 +61,12 @@ Sprint plan at `production/sprints/sprint-1.md`; QA plan at `production/qa/qa-pl
 - **S1-07** — DONE (`b26c6e8`) — one-line IG-3 scope carve-out annotation added at `PlayerLaneMovementComponent.h:122`.
 - **S1-08** — DONE (`10e6e4b`) — TR-PM-022/023/024 downstream-consumer table + Cross-ADR Forward Contract Closure Log added to `requirements-traceability.md`. Skill invocation intentionally skipped (AC-narrow scope, targeted edit sufficient). Wave Spawner row-level status refresh deferred to a future full `/architecture-review` pass.
 - **S1-09** (sequential Setup B → Setup D watchdog integration test) — unblocked, not started.
-- **S1-10** (runtime-verification runbook `docs/tests-headless.md`) — unblocked, not started.
+- **S1-10** — DONE (`fa1eccf`) — 147-line runbook at `docs/tests-headless.md` covering canonical invocation, flag-registration rule, world-setup rule, common pitfalls, and how to add new test categories.
 
 ### Follow-ups filed (not blocking)
 
 1. **Build-verify foundation-to-build commit** (`02654f2`) — run `Build/BatchFiles/RunUAT.sh` or in-editor build to confirm fresh clone builds before starting the next epic. **PARTIAL PROGRESS 2026-08-10/12**: `SLIPSTORMEditor` target confirmed to build fresh via `Build/BatchFiles/Mac/Build.sh` during S1-04 verification. Full RunUAT / Shipping-target validation still pending.
-2. **Runtime-verification runbook** (S1-10) — as above.
+2. ~~**Runtime-verification runbook** (S1-10) — as above.~~ **DONE** in `fa1eccf`.
 3. **QA-S1** (S1-09) — as above.
 4. ~~**UE-S1** (S1-07) — as above.~~ **DONE** in `b26c6e8`.
 5. **`docs/architecture/control-manifest.md`** — does not exist yet; referenced by `/story-done` manifest-staleness check (currently skipped).
@@ -75,11 +75,10 @@ Sprint plan at `production/sprints/sprint-1.md`; QA plan at `production/qa/qa-pl
 
 ### Next recommended
 
-1. **S1-10** — Runtime-verification runbook at `docs/tests-headless.md`. 0.25 day, no deps. Small documentation task — good next-step after the run of docs work.
-2. **S1-06** — Story-010 PEAT/Harding FPA evidence + art-director sign-off. R12a-PENDING carryover; 0.5-day estimate; no dependencies.
-3. **S1-09** — Sequential Setup B → Setup D watchdog integration test. Unblocked by S1-04; 0.5 day.
-4. **Wave Spawner epic** — `/create-epics wave-spawner` is technically unblocked by ADR-0011 Proposed, but epic-Done gates on ADR-0010 (Pull-Wave lifecycle, not yet authored — see ADR-0011 Risks table). Do NOT start story authoring until ADR-0010 lands.
+1. **S1-06** — Story-010 PEAT/Harding FPA evidence + art-director sign-off. R12a-PENDING carryover; 0.5-day estimate; no dependencies. Non-docs task — breaks the docs streak with actual QA evidence work; needs art-director agent.
+2. **S1-09** — Sequential Setup B → Setup D watchdog integration test. Unblocked by S1-04; 0.5 day. Actual code change (test file); would benefit from having the S1-10 runbook to reference.
+3. **Wave Spawner epic** — `/create-epics wave-spawner` is technically unblocked by ADR-0011 Proposed, but epic-Done gates on ADR-0010 (Pull-Wave lifecycle, not yet authored — see ADR-0011 Risks table). Do NOT start story authoring until ADR-0010 lands.
 
 ### Sprint 1 completion tally
 
-**DONE (5/7 must+should+nice)**: S1-04, S1-05, S1-07, S1-08, and — pending — Wave Spawner promotion. **REMAINING**: S1-06 (should), S1-09 (nice), S1-10 (nice).
+**DONE (5/7 tracked)**: S1-04 (must), S1-05 (must), S1-07 (should), S1-08 (should), S1-10 (nice-to-have). **REMAINING**: S1-06 (should), S1-09 (nice-to-have). All Must-Have tasks complete.
