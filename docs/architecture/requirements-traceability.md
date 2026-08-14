@@ -106,6 +106,29 @@ All TR-PM-001 through TR-PM-035 are ✅ **Covered** by **ADR-0009: Player Moveme
 
 `platform-seam-interfaces.md` Seam 12 (`IPlayerMovementProvider` + `FPlayerMovementProvider_Production(UPlayerLaneMovementComponent*)` + `FPlayerMovementTestStub`) provides the test seam for PM-consumer unit tests (Pull-Wave Rule 11 near-miss direct-read; Wave Spawner R11a-8 grace-window forward contract). Class-name reconciliation (`UPlayerMovementComponent*` → `UPlayerLaneMovementComponent*`) landed via 2026-07-03 hygiene edit per architecture-review-2026-07-03 (line 38).
 
+**Downstream consumers for PM's platform-broadcast surface** (TR-PM-022/023/024):
+
+| TR-ID | PM Surface | Consumer | Consumption Point | Covering ADR |
+|-------|------------|----------|-------------------|--------------|
+| TR-PM-022 | `OnHardwarePerformanceBreach(bool)` multicast broadcast | Wave Spawner | Subscribes in `Initialize()` — arms/disarms M=3 PEAK gate + 3.0s grace window per R11a-8 | ADR-0011 (Proposed 2026-08-12) |
+| TR-PM-022 | Same broadcast | HUD banner | Subscribes for banner display per R11a-9 disclosure | Unauthored HUD/Accessibility Settings GDD (forward contract registered — see Future gaps §224) |
+| TR-PM-023 | Breach action (M=3 PEAK suppression + 3.0s grace) | Wave Spawner | Enforcement in ADR-0011 admission pipeline Stage 3 when gate active | ADR-0011 (Proposed) closes Wave Spawner side; ADR-0009 (Accepted) closes PM side |
+| TR-PM-024 | `is_hw_performance_degraded : bool` read-only property | Wave Spawner | Poll for gate decision + Death Replay determinism preservation | ADR-0011 (Proposed) |
+| TR-PM-024 | Same property | HUD banner | Poll for banner display state | Unauthored HUD/Accessibility Settings GDD |
+| TR-PM-024 | Same property | DPC | Potential future consumer (no current binding) | Not required this pass |
+
+**Cross-ADR Forward Contract Closure Log** — tracks contracts where one ADR declares a public surface another ADR must consume:
+
+| Contract | Producer (ADR) | Consumer (ADR) | Status |
+|----------|----------------|----------------|--------|
+| `OnHardwarePerformanceBreach(bool)` broadcast (TR-PM-022) | ADR-0009 Accepted | ADR-0011 Proposed | ⚠️ Closed pending ADR-0011 → Accepted |
+| M=3 PEAK suppression + 3.0s grace (R11a-8, TR-PM-023) | ADR-0009 Accepted; ADR-0005 Accepted (WS obligation cited) | ADR-0011 Proposed (admission-pipeline enforcement) | ⚠️ Closed pending ADR-0011 → Accepted |
+| `is_hw_performance_degraded` property (TR-PM-024) | ADR-0009 Accepted | ADR-0011 Proposed (poll site) | ⚠️ Closed pending ADR-0011 → Accepted |
+| HUD banner disclosure copy (R11a-9) | ADR-0009 Accepted | HUD/Accessibility Settings GDD (unauthored) | ❌ Open — awaits HUD GDD |
+| Near-miss haptic dispatch (R11a-12, TR-PM-030) | ADR-0009 Accepted | ADR-0002 Proposed (INT-002 interface-stable) | ✅ Closed (INT-002 landed 2026-06-26) |
+
+**Legend**: ✅ Closed = producer + consumer both Accepted or interface-stable. ⚠️ Closed pending = both ADRs name the binding; a Proposed → Accepted promotion closes it. ❌ Open = no consuming ADR/GDD exists yet.
+
 ### Difficulty & Phase Controller (24 TRs) — ADR-0008
 
 All TR-DPC-001 through TR-DPC-024 are ✅ **Covered** by **ADR-0008: DPC Hosting and FDPCFrameState Atomic Snapshot Publication** (**Accepted 2026-06-27**, authored 2026-06-26). Every TR-DPC-NNN row maps 1:1 in ADR-0008's GDD Requirements Addressed table (ADR-0008 lines 576–601).
@@ -210,7 +233,7 @@ Top-priority covering ADR: **ADR-0011 (proposed) — Wave Spawner Pattern Librar
 ### Feature layer gaps
 
 6. **TR-PW-002, 005, 006, 010, 015, 016, 017** + others — **ADR-0010** (Pull-Wave Pool + State Machine + Despawn Pipeline).
-7. **TR-WS-001…007, 013, 014, 021, 029…035** + others — **ADR-0011** (Wave Spawner Pattern Library + F-3 Cadence Governor).
+7. **TR-WS-001…007, 013, 014, 021, 029…035** + others — **ADR-0011** (Wave Spawner Pattern Library + F-3 Cadence Governor). **Authored Proposed 2026-08-12** (`91f4c4c`); promotion to Accepted deferred until ADR-0005 → Accepted (blocked on Foundation HW-verification gate at ADR-0001) or a pragmatic-promotion architecture-review pass. Row-level status refresh in the Wave Spawner table (line 153–193) deferred to a full `/architecture-review` pass.
 
 ### Resolved this pass
 
