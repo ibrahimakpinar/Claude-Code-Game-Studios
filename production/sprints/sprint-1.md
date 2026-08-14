@@ -26,7 +26,7 @@ Close the Player Movement epic cleanly (commit accumulated work, update epic-clo
 ### Should Have
 | ID | Task | Agent/Owner | Est. Days | Dependencies | Acceptance Criteria |
 |----|------|-------------|-----------|-------------|-------------------|
-| S1-06 | Story 010 PEAT/Harding FPA evidence document + art-director sign-off (R12a-PENDING deferred items from Story 010 close) | art-director + qa-tester | 0.5 | none | `production/qa/evidence/story-010-peat-evidence.md` + sign-off row checked; both deferred ACs covered |
+| S1-06 | Story 010 PEAT/Harding evidence **skeleton + design-analytical pre-check** (R12a-PENDING deferred items from Story 010 close; formal Harding FPA / W3C-PEAT gate reconfirmed as Polish-phase per presentation §8 AC-COMMIT-FLASH-CADENCE) | Claude + art-director (Polish) | 0.5 | none | `production/qa/evidence/story-010-peat-evidence.md` exists with design-parameter table, preliminary `flash_rate × contrast` sanity-check per presentation §4 F-COMMIT-CADENCE-CAP working sketch, Polish-phase Harding FPA capture protocol, and empty sign-off rows. Sign-off checkbox marking deferred to Polish per §8. |
 | S1-07 | UE-S1 follow-up: ADR-0009 IG-3 outbound-binding carve-out annotation at PLMC.h:121 | Claude | 0.25 | none | One-line comment clarifies IG-3 governs PM's outbound bindings; test-scope lambdas exempt |
 | S1-08 | `/architecture-review` PM downstream consumers pass (Wave Spawner R11a-8, HUD banner, ADR-0005 forward contract closure) | technical-director | 0.5 | S1-04, S1-05 | Traceability matrix updated; TR-PM-022/023/024 downstream consumers documented; forward contract table updated |
 

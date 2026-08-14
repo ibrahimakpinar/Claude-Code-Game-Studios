@@ -109,6 +109,7 @@ The following gates are deferred to Polish per presentation §8:
 - **PEAT/Harding FPA formal gate** — automated Harding FPA scanner run against video capture of Setup A + Setup B scenarios. Requires PEAT test kit (external dependency).
   - Deferred owner: qa-lead + accessibility-specialist
   - Deferred rationale: PEAT tooling integration is a Polish-phase infrastructure task; Story 010's ±0.80 amplitude reduction from ±1.0 is the pre-emptive design compliance measure.
+  - **See also**: `production/qa/evidence/story-010-peat-evidence.md` — Sprint 1 skeleton + design-analytical pre-check + Polish capture protocol.
 
 ---
 
