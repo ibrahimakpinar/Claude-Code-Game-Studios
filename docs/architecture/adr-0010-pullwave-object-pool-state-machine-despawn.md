@@ -233,37 +233,148 @@ struct FPullWaveSpawnParams
 
 ## Alternatives Considered
 
-_(deferred to next session — Alternatives, Consequences, Risks, GDD Requirements Addressed, Performance Implications, Migration Plan, Validation Criteria, Related Decisions all authored in a follow-up session per the ADR-0011 staged-authoring precedent.)_
+### Alternative 1: `TSparseArray<FPullWaveInstanceState>` pool with stable indices
+
+- **Description**: Use `TSparseArray` instead of `TArray`. Removal is O(1) (marks the slot free without shifting); insertion reuses free slots; slot indices are stable across removals.
+- **Pros**: Faster mid-tick removal (`RemoveAt` on `TArray` is O(N) where N is elements after the removed index — for a 23-slot pool with mid-index removal this is ~10 element shifts). Slot index stability could simplify ISMC-index-to-pool-index mapping.
+- **Cons**: Iteration is NOT `WaveId` ASC — sparse array iteration order is insertion-order-with-holes, and hole reuse can produce out-of-order slots. Rule 14(b) `WaveId` ASC iteration is a BINDING contract enforced by AC-PW-10 same-tick-multi-admission assertion; violating it produces observable Pillar 5 bugs (waves-in-flight rendered in nondeterministic order, breaking the "iron-order" read the player uses to pattern-match barrages). Explicit sort per-tick would recover the ordering but adds O(N log N) per-tick sort cost that dominates the `TArray` shift cost at N ≤ 23.
+- **Rejection Reason**: Rule 14(b) `WaveId` ASC iteration is design-binding and worth the O(N) removal cost at N=23. The removal cost is bounded (max ~22 element shifts per removal; typical `sizeof(FPullWaveInstanceState) = 188` bytes memcpy per shift; total < ~4 KB memcpy per removal — well under the 0.25 ms per-tick budget). Adding a sort to recover ordering is strictly worse than paying the shift cost inline.
+
+### Alternative 2: `UObject`-per-wave instead of `FPullWaveInstanceState` struct pool
+
+- **Description**: Each wave is a `UPullWaveInstance : public UObject` allocated at admission and reclaimed to a `UObject` pool at DESPAWNING. State fields become `UPROPERTY()` members.
+- **Pros**: Blueprint-exposable per-wave state (useful if designers wanted to inspect wave state in-editor). Delegate binding via `AddUObject` (already the discipline enforced by ADR-0009 IG-3 rule) becomes natural for per-wave subscribers.
+- **Cons**: `UObject` allocation is a heap allocation with `NewObject<T>()` — even against a pooled `UObject` list this incurs GC-tracker registration cost per acquire. `MAX_CONCURRENT_WAVES_CAP = 16` means up to 16 acquires + 16 releases per PEAK second; measured against AC-PW-22a's 0.25 ms budget, this alone consumes a meaningful fraction. `UPROPERTY` overhead on inline scalar members (WaveId, TargetLane, etc.) adds reflection metadata bloat and per-instance GC scan cost. AC-PW-22b's 256-byte cache-line-friendly ceiling assumes plain struct layout; `UObject` layout adds vtable pointers + `UObjectBase` fields (typically ~64 bytes overhead per instance).
+- **Rejection Reason**: `UObject` cost is not justified — Pull-Wave has no reflection/Blueprint requirement at the per-instance level (the `APullWaveSubsystemActor` singleton is the Blueprint-exposable surface; per-wave state is programmer-only). Plain struct pool with `TArray` matches ADR-0007 RSM's transition-history approach and ADR-0011's `FPatternPool` storage discipline (sibling pattern consistency).
+
+### Alternative 3: Inline mid-tick pause-flush (`RSM.OnPausedChanged(false)` fires the flush synchronously in the delegate handler)
+
+- **Description**: When `RSM.OnPausedChanged(false)` fires, Pull-Wave's handler immediately walks the active-wave list and routes every LEANING/TRAVERSING/LANDED wave to DESPAWNING inline. No `bPauseFlushPending` flag; no deferral.
+- **Pros**: Zero-latency flush; no per-tick check of `bPauseFlushPending`; simpler control flow.
+- **Cons**: Contradicts R7 B13 binding. If `OnPausedChanged(false)` fires mid-tick from an external source (game-mode manager, Wave Spawner-side callback, RSM's own tick body), waves 0..N have already been ticked in the frame (their per-wave state advanced under `is_paused=true` guard → skipped) and waves N+1..15 have NOT yet been ticked. An inline flush walks the array — but the walk interleaves DESPAWNING-entry Rule 13 six-step pipeline events with the in-progress tick's mid-iteration state. Rule 13 step 3 (`OnWaveDespawned` broadcast) firing mid-tick against subscribers whose own tick body has not yet run this frame produces non-deterministic event ordering. AC-PW-15 unified event log's per-wave contiguity assertion fails because DESPAWNING-entry events for waves 0..N interleave with LEANING/TRAVERSING events for waves N+1..15 in the same tick.
+- **Rejection Reason**: R7 B13 is BINDING and documented in GDD line 110. The inline-flush pattern breaks AC-PW-15 contiguity and produces observable per-frame race conditions between Pull-Wave and its subscribers. The `bPauseFlushPending` + next-tick batch pattern is worth the one-frame latency to preserve batch-atomic contiguity.
+
+### Alternative 4: Held `UCurveFloat*` reference instead of value-copy `FPullWaveCurveSnapshot`
+
+- **Description**: `FPullWaveInstanceState` holds `TObjectPtr<UCurveFloat> LateralOffsetCurve` (GC-safe pointer) and evaluates the curve at runtime by calling `LateralOffsetCurve->GetFloatValue(t_norm)`.
+- **Pros**: No sampling step at admission; no 128-byte Samples array in each instance (drops `FPullWaveInstanceState` from 188 to 60 bytes — 3× cache-line-friendlier). Curve authoring changes take effect on the next admission (no cook-time re-sample step).
+- **Cons**: Runtime evaluation calls into `FRichCurve::Eval` which walks the key array and interpolates per call — measured at ~200-800 ns per call in UE 5.7 depending on key count. Pull-Wave calls this once per LEANING tick + once per TRAVERSING tick per wave = ~2 calls × 16 waves × 60 fps = 1920 calls/sec ≈ 384 µs to 1.5 ms per second — approaching the 0.25 ms per-tick budget's cumulative annual cost on a hot path. More critical: the curve asset is a shared `UObject`; if any system mutates the curve mid-run (e.g., tuning tool live-editing), all in-flight waves see the mutation mid-flight, breaking Rule 14(a) immutability and Death Replay determinism (AC-WS-13/14).
+- **Rejection Reason**: Rule 14(a) immutability + Death Replay determinism (AC-WS-13/14) are BINDING. Value-copy snapshot at admission is the only way to guarantee "the curve the wave was spawned with is the curve the wave lives and dies with." The 128-byte per-instance memory cost (`23 × 128 = 2944 bytes` total pool overhead) is negligible against the 1.5 GB mid-tier mobile memory ceiling. Runtime cost is O(1) array-lookup + linear-interp (~10-20 ns per call) vs `FRichCurve::Eval`'s ~200-800 ns — snapshot is faster at runtime as a bonus.
 
 ## Consequences
 
 ### Positive
 
-_(deferred to next session)_
+- **Story-authoring unblocked**: `/create-stories pull-wave` can proceed with concrete lifecycle + pool + despawn stances (per-story TR-PW-NNN rows reference D1–D6 sub-decisions).
+- **Cross-story consistency guaranteed**: All Pull-Wave stories share one lifecycle spec — no drift risk from stories inventing their own state transitions or despawn ordering.
+- **Determinism preserved**: `FPullWaveCurveSnapshot` value-copy at admission (D3 + D6) + `WaveId` ASC iteration (D1) + fixed despawn pipeline order (D4) together preserve Rule 14 determinism for Death Replay (AC-WS-13/14 same-platform constraint per ADR-0011).
+- **Single-call-site contracts documented**: `Telegraph->UnregisterWave` fires exactly once per WaveId at DESPAWNING (D4 step 2 — closes R6 B5); pause-flush fires exactly once per pause-boundary at the top of the next tick (D2 R7 B13); despawn pipeline runs exactly once per WaveId in fixed order (D4).
+- **ADR-0011 forward-reference closed**: `FPullWaveSpawnParams` snapshot immutability contract is now bound (D6). ADR-0011's Risks table item "FPullWaveSpawnParams struct not yet authored (owned by ADR-0010)" is resolved on this ADR's Acceptance.
+- **Cross-system boundary crisp**: D5's explicit forbidden-reads list (PM.OnSlipMidpoint, DPC.current_phase, RSM.RunSeed) removes ambiguity that GDD prose alone leaves open. Story reviewers can grep for these and fail CI on unauthorized use.
 
 ### Negative
 
-_(deferred to next session)_
+- **Bounded-pool hard cap**: `TArray::Reserve(23)` at BeginPlay locks capacity; no dynamic resize. If a future story genuinely needs a larger cap, `MAX_CONCURRENT_WAVES_CAP` widens AND pool size widens in lockstep. Both are cross-system contracts requiring `/propagate-design-change`. Not a design defect — the cap is Pillar-2 binding (choice-reaction task at N=3+ overloads read-and-react) — but the ADR ossifies the pool sizing.
+- **188-byte instance state not tiny**: at N=23 slots, pool consumes ~4.3 KB. Fits comfortably in L2 cache but not L1 on mid-tier mobile; per-tick iteration will incur some L1 misses. The 68-byte AC-PW-22b headroom is real breathing room but any future field addition (e.g., a per-wave audio-cue token) needs a scope review.
+- **Six-step despawn pipeline is complex**: 6 sequential steps × 3 despawn-reason branches (NaturalLanding / RunTermination / PauseFlush) = 18-cell test matrix. Rule 13 test spec must exercise all 18 cells via the AC-PW-15 unified event log. High test surface.
+- **Cadence governor tuning surface exposed**: not applicable here (that's ADR-0011). But D6's `FPullWaveSpawnParams` size (152 bytes) is a stack-copy cost at every `Construct()` call. At PEAK cadence ~2 admissions/sec, this is negligible (~300 bytes/sec stack traffic).
 
 ### Risks
 
-_(deferred to next session)_
+| Risk | Probability | Impact | Mitigation |
+|------|------------|--------|------------|
+| Forbidden-transition `check()` fires in Shipping under an untested edge case | MEDIUM | MEDIUM — visible glitch: wave stuck mid-state or vanishes without Rule 13 pipeline events | D2 forbidden-transition table + non-Shipping asserts + Shipping-safe `pull_wave_illegal_transition` telemetry per Shipping-Safety Enforcement Policy (PM platform §R10a-9); QA plan captures the 5-state × 5-state transition matrix (25 cells − 12 legal = 13 forbidden cells) |
+| Pause-flush race — `RSM.OnPausedChanged(false)` fires DURING Pull-Wave's tick body (from an external source mid-frame) | LOW | HIGH — waves partially ticked under is_paused=true then partially flushed | R7 B13 queued-next-tick + `bPauseFlushPending` synchronous set in handler; consumption at TOP of next tick BEFORE per-wave iteration begins. AC-PW-MID-TICK-PAUSE-DEFERRAL asserts exactly this scenario |
+| `FPullWaveCurveSnapshot` SAMPLE_COUNT=32 too coarse for a future high-curvature `LateralOffsetCurve` | LOW | MEDIUM — trajectory interp error > CURVE_ENDPOINT_TOLERANCE at some interior t_norm | AC-PW-22c prototype gate + Design pre-check math (D3 rationale) show ≤ 0.001 error at 32 samples for expected curve smoothness. If a future curve authoring exceeds this, `SAMPLE_COUNT` bumps to 48 (requires AC-PW-22b re-derivation because 60 + 4 × 48 = 252 still fits under 256). Bumping to 64 breaks AC-PW-22b (316 > 256) and forces a struct-layout redesign |
+| Cross-system tick-order violated by a future subsystem's tick registration | LOW | HIGH — Pull-Wave reads DPC snapshot before DPC has published it (frame-stale data) | Tick prerequisite mechanism per ADR-0007/0008 tick-hosting chain; AC-DPC-* + AC-RSM-* tests exercise the tick-order invariant; new subsystem additions REQUIRE a tick-order review at ADR authoring per ADR Dependencies table |
+| `RemoveAt` per despawn scales poorly if pool size grows beyond 23 | LOW | LOW — O(N) shift cost with N ≤ ~50 remains sub-microsecond | Pool sizing is design-bound at 23 (see Negative consequence 1); growth requires ADR amendment which can re-evaluate `TSparseArray` at that time |
 
 ## GDD Requirements Addressed
 
-_(deferred to next session — per-TR mapping for TR-PW-001 through TR-PW-029)_
+| GDD System | Requirement (TR-ID) | How This ADR Addresses It |
+|------------|---------------------|--------------------------|
+| pull-wave-behavior.md | **TR-PW-002** 5-state lifecycle SPAWNED→LEANING→TRAVERSING→LANDED→DESPAWNING | D2 — full state machine with forbidden-transition table |
+| pull-wave-behavior.md | **TR-PW-003** TELEGRAPH_WINDOW_FLOOR_S = 0.70s (R10d locked) | D5 upstream reads table — `LeanDurationS = clamp(DPC.telegraph_window_s, TELEGRAPH_WINDOW_FLOOR_S, ∞)` captured at SPAWNED; TELEGRAPH_WINDOW_FLOOR_S value itself is a tuning knob (GDD-owned, not ADR-decided) |
+| pull-wave-behavior.md | **TR-PW-004** FPullWaveCurveSnapshot SAMPLE_COUNT=32 immutable at SPAWNED | D3 — locked SAMPLE_COUNT=32 with rationale + rejection of 16/64 alternatives |
+| pull-wave-behavior.md | **TR-PW-005** TArray<FPullWaveInstanceState> with RemoveAt (not RemoveAtSwap) | D1 — container + RemoveAt-not-Swap semantics; Alternative 1 documents the TSparseArray rejection |
+| pull-wave-behavior.md | **TR-PW-006** wave_id monotonic int32; iteration ASCENDING per Rule 14(b) | D1 — WaveId allocation + ASC iteration + Add-append-to-tail semantics |
+| pull-wave-behavior.md | **TR-PW-007** FPullWaveInstanceState 188 bytes ≤ 256 ceiling | D3 — total 188 bytes with 68-byte headroom; AC-PW-22b static_assert path |
+| pull-wave-behavior.md | **TR-PW-010** Pool ≥ 23 (16 + 2 + 5) | D1 — Reserve(23) at BeginPlay; alignment with ADR-0005 AWave pool |
+| pull-wave-behavior.md | **TR-PW-014** Velocity frozen at SPAWNED; no mid-flight updates | D6 — `ForwardVelocityMs` captured in FPullWaveSpawnParams; const after `Construct()` copy per D2 SPAWNED-const invariant |
+| pull-wave-behavior.md | **TR-PW-015** TraverseElapsedS canonical; pause excluded; no resume teleport | D2 TRAVERSING advance behavior — `TraverseElapsedS += DeltaTime` only when `!RSM.GetIsPaused()`; pause-freeze semantic |
+| pull-wave-behavior.md | **TR-PW-016** Despawn pipeline: Coll→Tel→OnWaveDespawned→hide→clear→pool | D4 — full six-step pipeline (adds "hide" + "clear" + "pool" beyond the GDD's 3-step summary; matches GDD §Rule 13 detail) |
+| pull-wave-behavior.md | **TR-PW-017** Seam 13 OnDespawnedUserCallback test-stub slot | D5 downstream broadcasts table — `OnWaveDespawned(WaveId, DespawnReason)` at Rule 13 step 3; Seam 13 alignment |
+| pull-wave-behavior.md | **TR-PW-021** Tick chain RSM→DPC→PM→PW→Telegraph→Collision | D5 — cross-system read/write contract references the tick-order per GDD line 239; Pull-Wave reads DPC/PM at specified boundaries |
+| pull-wave-behavior.md | AC-PW-15 unified event log contiguity | D4 six-step ordering invariant + D2 pause-flush queued-next-tick atomicity together preserve contiguity |
+| pull-wave-behavior.md | AC-PW-22b sizeof static_assert | D3 — total 188 bytes; static_assert enforces at compile |
+| pull-wave-behavior.md | AC-PW-MID-TICK-PAUSE-DEFERRAL | D2 pause-flush queued-to-next-tick per R7 B13; Alternative 3 documents rejected inline-flush |
+| pull-wave-behavior.md | Rule 11 near-miss detection reads PM.current_lane | D5 upstream reads table — read at LANDED entry via Seam 12; forbidden-reads list explicitly excludes PM.OnSlipMidpoint (R1 RC-A) |
+| pull-wave-behavior.md | Rule 14(a) FPullWaveCurveSnapshot immutability | D3 — value-type + no asset reference held; Alternative 4 documents rejected held-reference approach |
+| pull-wave-behavior.md | Rule 14(b) WaveId ASC iteration | D1 — natural array order + Add-append-to-tail + monotonic WaveId + RemoveAt-not-Swap |
+| pull-wave-behavior.md | Rule 19 pause-flush trigger from RUNNING (not ABORTED) | D2 pause-flush section — RSM `current_state` checked at flush consumption to distinguish RUNNING vs ABORTED |
+| wave-spawner-pattern-library.md | FPullWaveSpawnParams handoff contract | D6 — FPullWaveSpawnParams format + producer/consumer semantics + immutability. Closes ADR-0011 forward-reference |
+| player-movement.md | Seam 12 IPlayerMovementProvider consumption at LANDED | D5 upstream reads table — read at LANDED entry only; not per-tick |
+
+**Out-of-scope for ADR-0010** (deferred to other ADRs, tuning knobs, or downstream stories):
+- TR-PW-001, TR-PW-011 through TR-PW-013, TR-PW-022 through TR-PW-024, TR-PW-027 — rendering/visual (owned by ADR-0006)
+- TR-PW-008, TR-PW-009 — asset-authoring cook-time checks (owned by Wave Spawner cook-time validator downstream story)
+- TR-PW-018, TR-PW-019, TR-PW-020 — MIN_ESCAPE_SLIPS, PEAK triplets, LEAN_ANGLE tier gap (design constants — GDD-owned, referenced by ADR-0011 D4 as cook-time authoring contract)
+- TR-PW-025, TR-PW-026 — NEAR_MISS_FLASH_DURATION_S, F-BARRAGE-SURVIVABILITY-INVARIANT scope (design constants — GDD-owned)
+- TR-PW-028 — PM SLIP_TWEEN_DURATION_S forward contract (PM-owned; consumed by Pull-Wave via D5 but decided in PM GDD + ADR-0009)
+- TR-PW-029 — SPAWN_PLANE_Z_OFFSET_M tuning knob (GDD tuning table, not ADR-decided)
 
 ## Performance Implications
 
-_(deferred to next session)_
+- **CPU per-tick** (against AC-PW-22a 0.25 ms budget):
+  - D2 state-machine dispatch: O(N) where N = active-wave count (≤ 16). Per-wave body: 1 pause gate, 1 state switch, 1-3 float ops (accumulator advance), 1 curve `EvaluateAt` (D3 O(1)), 1 ISMC `UpdateInstanceTransform` (ADR-0006 batched via `MarkRenderStateDirty` once per frame). Estimated ~5-10 µs per active wave; ≤ 160 µs at N=16 — well under budget.
+  - D4 despawn pipeline: fires once per wave-lifetime; 6 steps × ≤ 2-5 µs per step ≈ 20-30 µs per despawn. At PEAK spawn rate ~2 waves/sec, amortized ~50 µs/sec.
+  - D1 `RemoveAt`: O(N) shift × 188 bytes memcpy per element; worst-case at N=23, mid-index removal = 11 × 188 = 2 KB memcpy ≈ 1-2 µs on mid-tier mobile.
+  - D6 `Construct()`: 152-byte stack copy + 1 `TArray::Add` + field-copy loop. ≤ 5 µs per admission.
+  - **Total per-tick cost estimate: < 200 µs at PEAK N=16 — 80% of AC-PW-22a budget with 50 µs headroom**.
+- **Memory** (against 1.5 GB mid-tier mobile ceiling per technical-preferences.md):
+  - Pool: `23 × 188 bytes = 4324 bytes` for `FPullWaveInstanceState[23]`.
+  - Snapshot storage per instance: 128 bytes (embedded in the 188-byte total).
+  - Delegate binding overhead: 5 delegates × subscriber-count × ~32 bytes per FDelegateHandle. At 5-10 subscribers total per delegate, ~1.5 KB.
+  - `FPullWaveSpawnParams` stack cost: 152 bytes per admission, transient.
+  - **Total ADR-0010 memory footprint: < 10 KB — negligible against the 1.5 GB ceiling**.
+- **Load Time**: `TArray::Reserve(23)` at `APullWaveSubsystemActor::BeginPlay` — one heap allocation of 4324 bytes. < 100 µs on mid-tier mobile; no impact on load-time budget.
+- **Network**: Not applicable — SLIPSTORM is single-player mobile.
 
 ## Migration Plan
 
-_(deferred to next session)_
+No existing Pull-Wave lifecycle implementation to migrate — ADR-0010 authors the greenfield per-instance runtime architecture on top of ADR-0006's Accepted renderer topology.
+
+**Story authoring under `/create-stories pull-wave`** produces the implementation from scratch:
+
+1. Story 1 — `FPullWaveInstanceState` + `FPullWaveCurveSnapshot` + `FPullWaveSpawnParams` struct definitions + AC-PW-22b sizeof static_assert (Logic).
+2. Story 2 — Pool storage + `WaveId` monotonic allocation + `Reserve(23)` at BeginPlay + `Add`/`RemoveAt` semantics (Logic).
+3. Story 3 — Five-state machine `EPullWaveState` + forbidden-transition `check()`s + `TransitionTo()` helper (Logic).
+4. Story 4 — Per-tick state advance body (SPAWNED → LEANING → TRAVERSING) with pause-freeze gate (Integration).
+5. Story 5 — LANDED entry + `CollisionOutcome` determination via Seam 12 PM read + `OnWaveHit` / `OnNearMiss` broadcasts (Integration).
+6. Story 6 — Rule 13 six-step despawn pipeline + `OnWaveDespawned` broadcast + pool slot return (Integration).
+7. Story 7 — Pause-flush queued-to-next-tick + `bPauseFlushPending` handler + AC-PW-MID-TICK-PAUSE-DEFERRAL test (Integration).
+8. Story 8 — Run-termination drain semantics (RSM RUNNING → DEAD/COMPLETE/ABORTED distinct from PauseFlush) (Integration).
+9. Story 9 — `Construct(FPullWaveSpawnParams)` entry point + Wave Spawner integration (Integration; wired against ADR-0011).
+
+**Ordering dependency**: ADR-0010 acceptance is a story-authoring precondition for the Pull-Wave epic. Sprint N (to be planned) authors these stories after ADR-0010 Accepted + ADR-0011 Accepted (both are currently Proposed; can promote together in a paired architecture-review pass).
 
 ## Validation Criteria
 
-_(deferred to next session)_
+The following are the ADR-Accepted signals — how we know the architecture is correct:
+
+- **AC-PW-22b compile-time size gate**: `static_assert(sizeof(FPullWaveInstanceState) <= 256)` passes in a fresh build. Value at commit is 188 bytes.
+- **AC-PW-22b `RemoveAtSwap` grep gate**: CI grep pattern rejects any `RemoveAtSwap` call on `ActiveWaves` (pattern 11).
+- **`WaveId` ASC iteration test** (Logic): admit 20 waves; remove waves at mid-array indices 3, 7, 11; iterate remaining 17 waves; assert `WaveId` strictly ascending across the iteration.
+- **`WaveId` never-reused test** (Logic): admit 30 waves across a synthetic 3-minute run; assert `WaveId` values are strictly ascending and no value appears twice.
+- **Pause-freeze test** (Integration): drive Pull-Wave to LEANING state; set `RSM.IsPaused = true`; tick 60 frames; assert `LeanProgress` unchanged. Set `RSM.IsPaused = false`; tick 60 more frames; assert `LeanProgress` advanced normally.
+- **Pause-flush queued-to-next-tick test** (Integration; AC-PW-MID-TICK-PAUSE-DEFERRAL): fire `RSM.OnPausedChanged(false)` mid-tick from a subscriber's handler; assert no active wave transitions to DESPAWNING within that tick; assert all active waves transition to DESPAWNING atomically at the top of the next tick in `WaveId` ASC order.
+- **Rule 13 six-step ordering test** (Integration; AC-PW-15): admit 3 waves (WaveIds N, N+1, N+2); drive all to DESPAWNING in the same tick via pause-flush; capture the unified event log; assert per-`WaveId` contiguity — no interleaving of despawn-pipeline events across WaveIds; steps 1→2→3 in order per WaveId; steps 4→5→6 ordered same-tick.
+- **`FPullWaveCurveSnapshot` immutability test** (Logic): construct snapshot from a `UCurveFloat` asset; mutate the source asset; assert snapshot Samples unchanged.
+- **`SAMPLE_COUNT=32` interpolation error test** (Logic; AC-PW-22c prototype gate): sample a synthetic high-curvature test curve at 32 samples; assert `max |EvaluateAt(t) − source_curve.GetFloatValue(t)| < CURVE_ENDPOINT_TOLERANCE = 0.005` across 1000 random t values.
+- **Forbidden-transition assertion test** (Logic; non-Shipping build): attempt `SPAWNED → TRAVERSING` transition; assert `check()` fires. Repeat for 12 other forbidden cells in the 25-cell transition matrix.
+- **Run-termination distinct from PauseFlush test** (Integration): drive Pull-Wave to LEANING; fire RSM RUNNING → DEAD; assert wave continues advancing through TRAVERSING → LANDED → DESPAWNING with `DespawnReason == RunTermination`. Compare to pause-flush scenario where wave transitions directly to DESPAWNING with `DespawnReason == PauseFlush`.
+- **`FPullWaveSpawnParams` size gate**: `static_assert(sizeof(FPullWaveSpawnParams) == 152)` passes. Verifies alignment + no unexpected padding.
+- **Per-tick budget test** (Performance): run Pull-Wave under N=16 active waves for 60 frames; measure per-tick CPU cost via `STATGROUP_PullWave`; assert < 0.25 ms per AC-PW-22a on mid-tier mobile hardware (iPhone XR / Pixel 5 / Galaxy A52 device list per AC-WS-30).
 
 ## Related Decisions
 
