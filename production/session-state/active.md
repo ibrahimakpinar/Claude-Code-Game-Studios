@@ -26,11 +26,27 @@ Sprint 1 heavy-cleanup session. Started on `main` for S1-05; user switched to `m
 
 **DONE (7/7 tracked)**: S1-04, S1-05, S1-06 (partial per §8 Polish-deferral), S1-07, S1-08, **S1-09 (VERIFIED — headless pass)**, S1-10. **Sprint 1 is fully closed.**
 
+### ADR-0010 (Pull-Wave) — Stage 1 landed 2026-08-15
+
+Committed as `0c3180f` (276 lines) — skeleton + Context + Decision D1..D6:
+- **D1** Ordered object pool (TArray, Reserve 23, WaveId monotonic int32, RemoveAt-not-RemoveAtSwap)
+- **D2** Five-state lifecycle (SPAWNED→LEANING→TRAVERSING→LANDED→DESPAWNING) + pause-freeze + pause-flush queued-next-tick per R7 B13
+- **D3** Immutable FPullWaveCurveSnapshot (SAMPLE_COUNT=32 locked; 188-byte instance state with 68-byte AC-PW-22b headroom)
+- **D4** Six-step despawn pipeline per Rule 13; single Telegraph->UnregisterWave call site per R6 B5
+- **D5** Cross-system read/write contract; non-dynamic multicast delegates
+- **D6** FPullWaveSpawnParams (152 bytes by value) — closes ADR-0011 forward-reference
+
+Status Proposed. Stage 2 (Alternatives / Consequences / Risks / GDD Requirements Addressed / Performance / Migration / Validation) deferred to next session per ADR-0011 staged-authoring precedent.
+
 ### Next-session recommendation
 
-1. **ADR-0010 (Pull-Wave) authoring** — gates the Wave Spawner epic. `/architecture-decision` entry point. Only substantive remaining work — S1-06's Polish-deferred sign-offs need a human anyway.
+1. **ADR-0010 stage 2** — Alternatives/Consequences/Risks/GDD-Requirements/Performance/Migration/Validation. Estimated ~200-300 more lines. Would complete the ADR for a promotion-eligibility gate.
 2. **Follow-up #1** (RunUAT build-verify) still partial — Shipping-target validation pending; `SLIPSTORMEditor` build confirmed today (S1-09 verification triggered fresh build).
 3. **S1-04 residuals** (R1 slip-cue expiry drift, R2 test staleness, R3 delegate-unbind leak) — file bug reports if not already done.
+
+### Housekeeping flag
+
+`active.md` is at ~160 lines. Session-start hook flags archive at >200. Next session is a natural archive moment — move current `active.md` to `production/session-logs/active-archive-2026-08-15.md` and start fresh with a compact handoff pointing to the archive.
 
 ### Branch state
 
