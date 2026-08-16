@@ -24,7 +24,7 @@ Also landed in `b94da6e`: TR-PW-027 wording fix + Cross-ADR Forward Contract Clo
 
 1. **`/create-stories pull-wave`** OR **`/create-stories wave-spawner`** — either epic can enter story authoring. Pull-Wave has 9 planned stories per ADR-0010 Migration Plan; Wave Spawner story count TBD per ADR-0011.
 2. **Full `/architecture-review`** — refresh row-level status in the PW table (line 140+) and WS table (line 153+); most rows there are still ❌ from before ADR-0010/0011 authored. Not blocking any new work; hygiene task.
-3. **Follow-up #1** — RunUAT/Shipping-target build-verify (still partial; `SLIPSTORMEditor` build confirmed 2026-08-14 via S1-09 headless-test run).
+3. ~~**Follow-up #1** — RunUAT/Shipping-target build-verify.~~ ✅ **RESOLVED 2026-08-16** — `SLIPSTORM Mac Shipping` build succeeded in 35 s via `Build.sh SLIPSTORM Mac Shipping`. Produced `Binaries/Mac/SLIPSTORM-Mac-Shipping.app` (222 MB). Fresh clone now confirmed buildable at both Editor + Shipping targets.
 4. **S1-04 residuals** — R1 (slip-cue expiry drift), R2 (test staleness vs Story-007-complete), R3 (delegate-unbind leak) — file bug reports; documented at `production/qa/evidence/s1-04-harness-fix-evidence.md`.
 
 ### Persistent follow-ups (not blocking, carried from prior handoff)
