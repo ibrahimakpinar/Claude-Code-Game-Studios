@@ -5,24 +5,16 @@
 
 ## Engine & Language
 
-<<<<<<< HEAD
 - **Engine**: Unreal Engine 5.7
 - **Language**: C++ (primary), Blueprint (gameplay prototyping)
 - **Rendering**: Mobile Forward renderer (mobile target); Lumen/Nanite disabled on mobile
 - **Physics**: Chaos (default)
-=======
-- **Engine**: [TO BE CONFIGURED — run /setup-engine]
-- **Language**: [TO BE CONFIGURED]
-- **Rendering**: [TO BE CONFIGURED]
-- **Physics**: [TO BE CONFIGURED]
->>>>>>> myorigin/main
 
 ## Input & Platform
 
 <!-- Written by /setup-engine. Read by /ux-design, /ux-review, /test-setup, /team-ui, and /dev-story -->
 <!-- to scope interaction specs, test helpers, and implementation to the correct input methods. -->
 
-<<<<<<< HEAD
 - **Target Platforms**: Mobile (iOS, Android)
 - **Input Methods**: Touch
 - **Primary Input**: Touch
@@ -50,35 +42,6 @@
 
 - **Framework**: UE Automation Framework (built-in)
 - **Minimum Coverage**: TBD per system (set in /sprint-plan)
-=======
-- **Target Platforms**: [TO BE CONFIGURED — e.g., PC, Console, Mobile, Web]
-- **Input Methods**: [TO BE CONFIGURED — e.g., Keyboard/Mouse, Gamepad, Touch, Mixed]
-- **Primary Input**: [TO BE CONFIGURED — the dominant input for this game]
-- **Gamepad Support**: [TO BE CONFIGURED — Full / Partial / None]
-- **Touch Support**: [TO BE CONFIGURED — Full / Partial / None]
-- **Platform Notes**: [TO BE CONFIGURED — any platform-specific UX constraints]
-
-## Naming Conventions
-
-- **Classes**: [TO BE CONFIGURED]
-- **Variables**: [TO BE CONFIGURED]
-- **Signals/Events**: [TO BE CONFIGURED]
-- **Files**: [TO BE CONFIGURED]
-- **Scenes/Prefabs**: [TO BE CONFIGURED]
-- **Constants**: [TO BE CONFIGURED]
-
-## Performance Budgets
-
-- **Target Framerate**: [TO BE CONFIGURED]
-- **Frame Budget**: [TO BE CONFIGURED]
-- **Draw Calls**: [TO BE CONFIGURED]
-- **Memory Ceiling**: [TO BE CONFIGURED]
-
-## Testing
-
-- **Framework**: [TO BE CONFIGURED]
-- **Minimum Coverage**: [TO BE CONFIGURED]
->>>>>>> myorigin/main
 - **Required Tests**: Balance formulas, gameplay systems, networking (if applicable)
 
 ## Forbidden Patterns
@@ -102,21 +65,12 @@
 <!-- Read by /code-review, /architecture-decision, /architecture-review, and team skills -->
 <!-- to know which specialist to spawn for engine-specific validation. -->
 
-<<<<<<< HEAD
 - **Primary**: unreal-specialist
 - **Language/Code Specialist**: ue-blueprint-specialist (Blueprint graphs) or unreal-specialist (C++)
 - **Shader Specialist**: unreal-specialist (no dedicated shader specialist — primary covers materials)
 - **UI Specialist**: ue-umg-specialist (UMG widgets, CommonUI, input routing, widget styling)
 - **Additional Specialists**: ue-gas-specialist (Gameplay Ability System, attributes, gameplay effects), ue-replication-specialist (property replication, RPCs, client prediction, netcode)
 - **Routing Notes**: Invoke primary for C++ architecture and broad engine decisions. Invoke Blueprint specialist for Blueprint graph architecture and BP/C++ boundary design. Invoke GAS specialist for all ability and attribute code. Invoke replication specialist for any multiplayer or networked systems (SLIPSTORM is solo — only relevant if leaderboard adds network). Invoke UMG specialist for all UI implementation.
-=======
-- **Primary**: [TO BE CONFIGURED — run /setup-engine]
-- **Language/Code Specialist**: [TO BE CONFIGURED]
-- **Shader Specialist**: [TO BE CONFIGURED]
-- **UI Specialist**: [TO BE CONFIGURED]
-- **Additional Specialists**: [TO BE CONFIGURED]
-- **Routing Notes**: [TO BE CONFIGURED]
->>>>>>> myorigin/main
 
 ### File Extension Routing
 
@@ -125,7 +79,6 @@
 
 | File Extension / Type | Specialist to Spawn |
 |-----------------------|---------------------|
-<<<<<<< HEAD
 | Game code (.cpp, .h files) | unreal-specialist |
 | Shader / material files (.usf, .ush, Material assets) | unreal-specialist |
 | UI / screen files (UMG Widget Blueprints, WBP_*) | ue-umg-specialist |
@@ -133,11 +86,3 @@
 | Native extension / plugin files (.uplugin, modules) | unreal-specialist |
 | Blueprint graphs (.uasset BP classes) | ue-blueprint-specialist |
 | General architecture review | unreal-specialist |
-=======
-| Game code (primary language) | [TO BE CONFIGURED] |
-| Shader / material files | [TO BE CONFIGURED] |
-| UI / screen files | [TO BE CONFIGURED] |
-| Scene / prefab / level files | [TO BE CONFIGURED] |
-| Native extension / plugin files | [TO BE CONFIGURED] |
-| General architecture review | Primary |
->>>>>>> myorigin/main
