@@ -1,10 +1,10 @@
 # ADR-0011: Wave Spawner Pattern Library
 
 ## Status
-Proposed
+Accepted
 
 ## Date
-2026-08-12
+2026-08-16 (authored Proposed 2026-08-12; promoted Proposed → Accepted 2026-08-16 via paired-promotion pass with ADR-0010 per scoped `/architecture-review single-gdd design/gdd/pull-wave-behavior.md` verdict — no cross-ADR conflicts detected, ADR-0011's own Ordering Note pragmatic-promotion path invoked; ADR-0005 Depends-On remains Proposed pending Foundation HW-verification at ADR-0001 but interface consumed is stable per same precedent that landed ADR-0009 Accepted 2026-07-09 despite ADR-0002 Proposed)
 
 ## Engine Compatibility
 

@@ -1,10 +1,10 @@
 # ADR-0010: Pull-Wave Object Pool, State Machine, and Despawn Pipeline
 
 ## Status
-Proposed
+Accepted
 
 ## Date
-2026-08-15
+2026-08-16 (authored Proposed 2026-08-15; promoted Proposed → Accepted 2026-08-16 via paired-promotion pass with ADR-0011 per scoped `/architecture-review single-gdd design/gdd/pull-wave-behavior.md` verdict — no blocking coverage gaps in Pull-Wave GDD, no cross-ADR conflicts detected, hard dependency ADR-0006 satisfied 2026-06-24; transitive ADR-0005 Proposed dependency resolved via same pragmatic-promotion precedent that landed ADR-0009 Accepted 2026-07-09 despite ADR-0002 Proposed)
 
 ## Engine Compatibility
 

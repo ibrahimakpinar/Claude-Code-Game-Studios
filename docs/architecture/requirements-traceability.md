@@ -121,9 +121,10 @@ All TR-PM-001 through TR-PM-035 are ✅ **Covered** by **ADR-0009: Player Moveme
 
 | Contract | Producer (ADR) | Consumer (ADR) | Status |
 |----------|----------------|----------------|--------|
-| `OnHardwarePerformanceBreach(bool)` broadcast (TR-PM-022) | ADR-0009 Accepted | ADR-0011 Proposed | ⚠️ Closed pending ADR-0011 → Accepted |
-| M=3 PEAK suppression + 3.0s grace (R11a-8, TR-PM-023) | ADR-0009 Accepted; ADR-0005 Accepted (WS obligation cited) | ADR-0011 Proposed (admission-pipeline enforcement) | ⚠️ Closed pending ADR-0011 → Accepted |
-| `is_hw_performance_degraded` property (TR-PM-024) | ADR-0009 Accepted | ADR-0011 Proposed (poll site) | ⚠️ Closed pending ADR-0011 → Accepted |
+| `OnHardwarePerformanceBreach(bool)` broadcast (TR-PM-022) | ADR-0009 Accepted | ADR-0011 Accepted (2026-08-16) | ✅ Closed |
+| M=3 PEAK suppression + 3.0s grace (R11a-8, TR-PM-023) | ADR-0009 Accepted; ADR-0005 Accepted (WS obligation cited) | ADR-0011 Accepted (admission-pipeline enforcement) | ✅ Closed |
+| `is_hw_performance_degraded` property (TR-PM-024) | ADR-0009 Accepted | ADR-0011 Accepted (poll site) | ✅ Closed |
+| `FPullWaveSpawnParams` snapshot handoff (Rule 14(a)) | ADR-0011 Accepted (produces at admission Stage 4) | ADR-0010 Accepted (consumes at Construct()) | ✅ Closed |
 | HUD banner disclosure copy (R11a-9) | ADR-0009 Accepted | HUD/Accessibility Settings GDD (unauthored) | ❌ Open — awaits HUD GDD |
 | Near-miss haptic dispatch (R11a-12, TR-PM-030) | ADR-0009 Accepted | ADR-0002 Proposed (INT-002 interface-stable) | ✅ Closed (INT-002 landed 2026-06-26) |
 
@@ -167,7 +168,7 @@ All TR-DPC-001 through TR-DPC-024 are ✅ **Covered** by **ADR-0008: DPC Hosting
 | TR-PW-024 | Alpha-tested motion trail; mobile tile-GPU constraint | ADR-0006 (implicit) | ✅ |
 | TR-PW-025 | NEAR_MISS_FLASH_DURATION_S=0.066s registry | — | ❌ |
 | TR-PW-026 | F-BARRAGE-SURVIVABILITY-INVARIANT scoped tier≥2 | — | ❌ |
-| TR-PW-027 | bTeleport=true (Pull-Wave logic) + SetCullDistances | ADR-0006 | ✅ |
+| TR-PW-027 | bTeleport / SetCullDistances NOT used in Pull-Wave logic (trajectory rule-based); rendering-only per ADR-0006 | ADR-0006 | ✅ |
 | TR-PW-028 | PM SLIP_TWEEN_DURATION_S [0.10, 0.15]s forward contract | — | ❌ |
 | TR-PW-029 | SPAWN_PLANE_Z_OFFSET_M default 15.0m | — | ❌ |
 
@@ -233,7 +234,8 @@ Top-priority covering ADR: **ADR-0011 (proposed) — Wave Spawner Pattern Librar
 ### Feature layer gaps
 
 6. **TR-PW-002, 005, 006, 010, 015, 016, 017** + others — **ADR-0010** (Pull-Wave Pool + State Machine + Despawn Pipeline).
-7. **TR-WS-001…007, 013, 014, 021, 029…035** + others — **ADR-0011** (Wave Spawner Pattern Library + F-3 Cadence Governor). **Authored Proposed 2026-08-12** (`91f4c4c`); promotion to Accepted deferred until ADR-0005 → Accepted (blocked on Foundation HW-verification gate at ADR-0001) or a pragmatic-promotion architecture-review pass. Row-level status refresh in the Wave Spawner table (line 153–193) deferred to a full `/architecture-review` pass.
+7. ✅ **RESOLVED 2026-08-16** — **ADR-0011** (Wave Spawner Pattern Library + F-3 Cadence Governor) authored Proposed 2026-08-12 (`91f4c4c`) and promoted Proposed → Accepted 2026-08-16 via paired-promotion pass with ADR-0010 per `/architecture-review single-gdd design/gdd/pull-wave-behavior.md` scoped verdict (no cross-ADR conflicts detected; pragmatic-promotion path invoked mirroring ADR-0009→ADR-0002 2026-07-03 precedent — ADR-0005 Depends-On remains Proposed pending Foundation HW-verification but the consumed interface is stable). Closes **TR-WS-001…007, 013, 014, 021, 029…035** + others. Row-level status refresh in the Wave Spawner table (line 153–193) still deferred to a full `/architecture-review` pass.
+8. ✅ **RESOLVED 2026-08-16** — **ADR-0010** (Pull-Wave Object Pool + State Machine + Despawn Pipeline) authored Proposed 2026-08-15 (`0c3180f` stage 1 + `537e5dc` stage 2, 387 lines total) and promoted Proposed → Accepted 2026-08-16 via same paired-promotion pass (hard dependency ADR-0006 Accepted 2026-06-24 satisfied). Closes **TR-PW-002, 004-007, 010, 014-017, 021, 023** via D1..D6 sub-decisions. Cross-ADR forward contract on `FPullWaveSpawnParams` snapshot handoff now bidirectionally closed with ADR-0011. Row-level status refresh in the Pull-Wave table (line 140+) still deferred to a full `/architecture-review` pass.
 
 ### Resolved this pass
 
