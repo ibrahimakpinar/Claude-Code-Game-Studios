@@ -6,6 +6,7 @@ Engine: Unreal Engine 5.7
 | Epic | Layer | System | GDD | Stories | Status |
 |------|-------|--------|-----|---------|--------|
 | [Player Movement (Slip)](player-movement/EPIC.md) | Core | Player Movement | `design/gdd/player-movement.md` (decomposed into 3 sub-GDDs) | 14 stories (13 numbered + Story 001a test harness); all closed 2026-07-11 through 2026-08-07 | **Done** (2026-08-07) |
+| [Pull-Wave Behavior](pull-wave/EPIC.md) | Feature | Pull-Wave | `design/gdd/pull-wave-behavior.md` | 9 stories | **Ready** |
 
 ## Layer Progress
 
@@ -13,7 +14,7 @@ Engine: Unreal Engine 5.7
 |-------|---------------|---------------|-------------|------------|
 | Foundation | (TBD) | 0 | 0 | 0 |
 | Core | (TBD) | 1 | 0 | 1 |
-| Feature | (TBD) | 0 | 0 | 0 |
+| Feature | (TBD) | 1 | 1 | 0 |
 | Presentation | (TBD) | 0 | 0 | 0 |
 
 ## Next Actions
