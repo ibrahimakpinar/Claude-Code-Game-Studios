@@ -208,6 +208,22 @@ Also landed in `b94da6e`: TR-PW-027 wording fix + Cross-ADR Forward Contract Clo
 - Code review: Complete — /code-review run this session; 1 blocking gap (TC9 NaturalLanding negative control) fixed before close
 - Next recommended: Story 009 — Construct Entry Point — production/epics/pull-wave/story-009-construct-entry-point.md
 
+## Session Extract — /code-review + /story-done 2026-08-19 (Wave Spawner Story 001)
+- Story: production/epics/wave-spawner/story-001-subsystem-class-and-object-pool.md — Subsystem Class, Object Pool, Three-Pool Structure
+- Verdict: COMPLETE WITH NOTES
+- Files created during /dev-story (this session):
+  - Source/SLIPSTORM/DPC/DPCSubsystem.h (new stub — UDPCSubsystem + FDPCFrameState + FOnPostTickFrameStatePublished)
+  - Source/SLIPSTORM/WaveSpawner/Wave.h (new — AWave lightweight state token, no ISMC)
+  - Source/SLIPSTORM/WaveSpawner/Wave.cpp (new — companion impl, tick disabled)
+  - Source/SLIPSTORM/WaveSpawner/WaveSpawnerTypes.h (new — EWaveSpawnerLifecycleState, FPatternDefinition, FPatternPool, EAdmissionResult, DECLARE_STATS_GROUP; include-ordering bug fixed during review)
+  - Source/SLIPSTORM/WaveSpawner/WaveSpawnerSubsystem.h (new — UWaveSpawnerSubsystem full declaration)
+  - Source/SLIPSTORM/WaveSpawner/WaveSpawnerSubsystem.cpp (new — full impl with VR-2 null-world guard)
+  - Source/SLIPSTORM/Tests/Unit/WaveSpawner/WaveSpawnerPoolTest.cpp (new — 4 COMPLEX test commands)
+- Code-review fix: WaveSpawnerTypes.h ordering — DECLARE_STATS_GROUP moved to after #pragma once + includes
+- All 4 ACs checked: AC-WS-20a, AC-WS-20b, AC-WS-20c, AC-WS-10x
+- Remaining clangd errors: false positives from missing UBT compile_commands.json (CoreMinimal.h not found). Run UBT -mode=GenerateClangDatabase to resolve.
+- Next: Wave Spawner Story 002 — production/epics/wave-spawner/story-002-six-state-lifecycle.md
+
 ## Session Extract — /dev-story + /code-review + /story-done 2026-08-19 (Story 009)
 - Story: production/epics/pull-wave/story-009-construct-entry-point.md — Construct() Entry Point + Wave Spawner Integration
 - Files changed:
@@ -220,3 +236,29 @@ Also landed in `b94da6e`: TR-PW-027 wording fix + Cross-ADR Forward Contract Clo
 - 7 advisory deviations documented in Completion Notes (see story file)
 - Blockers: None
 - Next recommended: Check production/epics/pull-wave/ for remaining Ready stories in the epic
+
+## Session Extract — /story-done 2026-08-19 (Wave Spawner Story 002)
+- Verdict: COMPLETE WITH NOTES
+- Story: production/epics/wave-spawner/story-002-six-state-lifecycle.md — Six-State Lifecycle, Phase Drain, and Atomic Pool Swap
+- Files changed: WaveSpawnerTypes.h (ERunPhase added), WaveSpawnerSubsystem.h (GetTickableGameObjectWorld override, TransitionTo/GetActiveDrawPool/GetActivePhase/IsDrainWindowActive public API, TestOnly_SetLifecycleState/TestOnly_GetLifecycleState/TestOnly_IsValidTransition seams, private IsValidTransition/OnLifecycleTransition/CountInFlightWaves helpers), WaveSpawnerSubsystem.cpp (full lifecycle implementation), WaveSpawnerLifecycleTest.cpp (7 COMPLEX test commands)
+- Test written: Source/SLIPSTORM/Tests/Unit/WaveSpawner/WaveSpawnerLifecycleTest.cpp (7 commands: ValidTransitions, ForbiddenTransitions, PoolSwapOpenerToMid, PoolSwapMidToPeak, InFlightImmutability, DrainWindowClearance, ColdResetOnTermination)
+- Key decisions: ADR-0011 D3 authoritative (9 transitions supersede story ACs); TestOnly_IsValidTransition predicate seam for forbidden-transition testing (check(false) not catchable via AddExpectedError); UEnum::GetValueAsString (VR-9); GetTickableGameObjectWorld override (VR-7)
+- Tech debt logged: None
+- Next recommended: Wave Spawner Story 003 — Admission Gate + Cadence Gate — production/epics/wave-spawner/story-003-admission-gate-and-primer-bypass.md
+
+## Session Extract — /story-done 2026-08-20
+- Verdict: COMPLETE WITH NOTES
+- Story: production/epics/wave-spawner/story-003-admission-gate-and-primer-bypass.md — Admission Gate + Cadence Gate (F-3b) + Primer Bypass
+- Files changed: WaveSpawnerSubsystem.h (7 new TestOnly_* seams incl. TestOnly_SetResumeGrace, GetCurrentTimeS() declaration, 4 admission gate fields, test backing fields), WaveSpawnerSubsystem.cpp (OnDPCFrameReady full Rule 1 gate + primer bypass + F-3b cadence gate, GetCurrentTimeS(), bPrimerPending hook in OnLifecycleTransition(Active), 4 resets in Cold case), WaveSpawnerAdmissionGateTest.cpp (NEW — 8 TCs covering AC-WS-10/11/11b)
+- Test written: Source/SLIPSTORM/Tests/Unit/WaveSpawner/WaveSpawnerAdmissionGateTest.cpp (8 commands: Gate.DPCInactiveVeto, Gate.LifecycleNotActiveVeto, Gate.ResumeGraceVeto, Gate.CadenceNotElapsed, Gate.CadenceElapsed, Gate.PrimerBypass, Gate.PostPrimerCadenceNormal, Gate.IntervalFromDPCSnapshot)
+- Key decisions: OnDPCFrameReady (not Tick) per ADR-0011 D2; WaveSpawnIntervalS from FrameState (DPC snapshot) — correct per ADR, AC text reconciled; GetCurrentTimeS() test-injectable seam; TestOnly_SetResumeGrace bridges Story 007 RSM scope; pre-existing NewObject<>/GetTransientPackage() outer advisory
+- Tech debt logged: None
+- Next recommended: Wave Spawner Story 004 — Barrage Atomic Admission — production/epics/wave-spawner/story-004-barrage-atomic-admission.md
+
+## Session Extract — /story-done 2026-08-20
+- Verdict: COMPLETE WITH NOTES
+- Story: production/epics/wave-spawner/story-004-barrage-atomic-admission.md — Barrage Atomic Admission + barrage_owed Reservation
+- Tech debt logged: None (2 advisories documented in Completion Notes — bBarrageOwed Cold pre-clearance, kMaxConcurrentWavesStub stub)
+- Code review: Complete — CHANGES REQUIRED verdict resolved (3 required + 5 suggestions applied)
+- Test file: Source/SLIPSTORM/Tests/Unit/WaveSpawner/WaveSpawnerBarrageAdmissionTest.cpp (9 TCs: TC1–TC9 including TC8 rewrite + TC9 boundary test)
+- Next recommended: Wave Spawner Story 005 — Pattern Draw + Cadence Governor (F-3) + RNG Seeding — production/epics/wave-spawner/story-005-pattern-draw-and-cadence-governor.md
