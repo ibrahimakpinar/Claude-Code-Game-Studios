@@ -70,7 +70,7 @@ Phase-specific pools are the source of admission draws:
 The PEAK barrage sub-pool is the most-constrained sub-pool:
 - Target-lane sets are exactly the 7 surviving triplets per Rule 4: `{0,1,3}, {0,1,4}, {0,2,3}, {0,2,4}, {0,3,4}, {1,2,4}, {1,3,4}`.
 - Every barrage pattern has `lean_magnitude_tier ≥ 2` per Rule 5 (tier-1 PEAK barrages BANNED).
-- Per-signature authoring variation of ≥ 2 patterns per triplet per Rule 15 `MIN_BARRAGE_PATTERN_COUNT_PER_TRIPLET` (7 triplets × ≥ 2 patterns = ≥ 14 authored PEAK barrage patterns minimum).
+- Per-signature authoring variation of ≥ 1 pattern per triplet per Rule 15 `MIN_BARRAGE_PATTERN_COUNT_PER_TRIPLET` (7 triplets × ≥ 1 pattern = ≥ 7 authored PEAK barrage patterns minimum). Note: `BARRAGE_DISTINCT_SOURCE_LANES` forbids duplicate triplets, so the effective count is exactly 1 per triplet for a passing pool — the "≥ 1" threshold is the tightest constraint consistent with both checks.
 
 **Phase-transition pool swap** (Rule 10): the active pool source switches atomically at OPENER→MID and MID→PEAK boundaries (detected via `FDPCFrameState::current_phase` diff). In-flight waves — those already admitted but not yet despawned — complete under their admission-time `FPullWaveSpawnParams` snapshot. Parameter immutability is Pull-Wave's contract per ADR-0010; ADR-0011 only guarantees the *snapshot* is atomic and immutable at admission (no post-admission mutation from spawner side).
 
@@ -142,11 +142,18 @@ COUNTDOWN │             │
 
 | State | Enter Condition | Exit Condition | Admission Behavior |
 |-------|-----------------|----------------|--------------------|
-| Cold | Subsystem `Initialize()` OR terminal flush complete | RSM `IDLE → COUNTDOWN` fires (via `OnStateChanged` subscription) | Reject admission (no draws) |
+| Cold | Subsystem `Initialize()` OR terminal flush complete | RSM `IDLE → COUNTDOWN` fires (via `OnStateChanged` subscription) OR `ValidateAndPrunePoolsAtLoad()` detects critical empty pool at load → Idle (`critical_pool_empty_post_load` telemetry emitted; Story 009 / AC-WS-27b) | Reject admission (no draws) |
 | Active | RSM `COUNTDOWN → RUNNING` fires; consumes `RunSeed` snapshot at entry (Rule 8) | RSM `OnPausedChanged(true)` (→ Holding) OR RSM `RUNNING → DEAD \| COMPLETE \| ABORTED` (→ Flushing) | Full four-stage pipeline enabled |
 | Holding | RSM `OnPausedChanged(true)` while Active | RSM `OnPausedChanged(false)` (→ Flushing OR → Active OR → Idle per branches below) | Reject admission (Rule 13 pause-flush) |
 | Flushing | (a) RSM `RUNNING → DEAD \| COMPLETE \| ABORTED` from Active — drain all live via `IWaveSpawnerCallback` (Rule 14); OR (b) `OnPausedChanged(false)` resume when scheduled slots exist — flush stale scheduled before resuming admission (Rule 13) | (a) All live drained → Cold; (b) All scheduled drained → Active | Reject admission during drain |
-| Idle | Long pause: all previously-live waves have naturally despawned during Holding (no drain needed on resume) | RSM `OnPausedChanged(false)` → Active (no flush needed) | Reject admission |
+| Idle | Long pause: all previously-live waves have naturally despawned during Holding (no drain needed on resume) OR `ValidateAndPrunePoolsAtLoad()` at load when critical pool empty (from Cold; Story 009 / AC-WS-27b) | RSM `OnPausedChanged(false)` → Active (no flush needed; only valid from the long-pause path — spawner-disabled-at-load path never exits Idle) | Reject admission |
+
+<!-- Amendment 2026-08-21 (Story 009 / AC-WS-27b): Added Cold → Idle edge for critical_pool_empty_post_load.
+     ValidateAndPrunePoolsAtLoad() fires at OnFirstWorldLoaded() after actor-pool pre-allocation.
+     If any pool becomes empty after invalid-pattern pruning, the spawner transitions Cold → Idle and
+     is permanently disabled for the session (bSpawnerDisabledAtLoad = true, never cleared).
+     IsValidTransition() updated accordingly: Cold now also permits → Idle.
+     The ASC diagram above is non-normative; the states table (above) and IsValidTransition() are authoritative. -->
 
 **Forbidden transitions** (`check()` at `TransitionTo` entry — non-Shipping asserts, Shipping logs `illegal_lifecycle_transition` telemetry and no-ops):
 - `Cold → Holding` (must transition Cold → Active first)
@@ -165,20 +172,22 @@ The Wave Spawner pattern library requires the following 14 binding checks pass b
 
 | Check | Verification | GDD Line |
 |-------|--------------|----------|
-| `OPENER_NO_BARRAGE` | `count(p in OPENER_pool where p.is_barrage) == 0` | 189 |
-| `PEAK_SURVIVING_TRIPLETS` | `{p.target_lanes for p in PEAK_barrage_pool}` set-equals the 7 surviving triplets | 191 |
-| `PEAK_BARRAGE_MIN_TIER` | `min(p.lean_magnitude_tier for p in PEAK_barrage_pool) ≥ 2` | 192 |
-| `POOL_NON_EMPTY` | `count(p) ≥ 1` for every pool in `{OPENER, MID, PEAK_non_barrage, PEAK_barrage}` | 197 |
-| `PEAK_BASE_W_RANGE` | `0.15 ≤ base_w ≤ 0.40` where `base_w = |PEAK_barrage_pool| / |PEAK_pool_total|` | 198 |
-| `PEAK_BASE_W_BELOW_CEILING` | `base_w < W_CEILING` (G.1-configured cadence governor ceiling) | 199 |
-| `BARRAGE_UNIFORM_TIER` | All 3 slots of a barrage share the same `lean_magnitude_tier` | Rule 15 R2a-added |
-| `BARRAGE_DISTINCT_SOURCE_LANES` | Barrage source-lane values are 3 distinct lanes | Rule 15 R2a-added |
-| `PRIMER_PATTERN` | Every pool has at least one primer pattern | Rule 15 R1a-added |
-| `PILLAR_1_VERB_SLIP` | Every pattern requires the SLIP verb (no non-SLIP patterns) | Rule 15 R1a-added |
-| `MIN_BARRAGE_PATTERN_COUNT_PER_TRIPLET` | Each of the 7 surviving PEAK triplets has ≥ 2 authored patterns | Rule 15 R1a-added |
-| `PEAK_NO_ADJACENT_CLUSTER` | AC-WS-04 constraint from Rule 4 (no two adjacent lanes as a PEAK barrage triplet) | AC-WS-04 |
-| `POOL_SIZE_DERIVATION_MATCH` | Pool count matches F-2 formula | AC-WS-09 |
-| `NON_BARRAGE_STAGGER` | Non-barrage stagger constraint from Rule 6 | AC-WS-07 |
+| `OPENER_NO_BARRAGE` | `count(p in OPENER_pool where p.is_barrage) == 0` | AC-WS-01 |
+| `MID_NO_BARRAGE` | `count(p in MID_pool where p.is_barrage) == 0` | AC-WS-02 |
+| `PEAK_SURVIVING_TRIPLETS` | `{p.target_lanes for p in PEAK_barrage_pool}` set-equals exactly the 7 surviving triplets (missing OR extra triplets each fail) | AC-WS-03 |
+| `PEAK_BARRAGE_MIN_TIER` | `min(p.lean_magnitude_tier for p in PEAK_barrage_pool) ≥ 2` | AC-WS-04 |
+| `BARRAGE_W_SPAN` | `max(OnsetTimes) - min(OnsetTimes) ≤ TELEGRAPH_WINDOW_FLOOR_S / 2 = 0.35s` per barrage pattern | AC-WS-05 |
+| `NON_BARRAGE_STAGGER` | Consecutive `OnsetTimes` gaps ≥ `TELEGRAPH_WINDOW_FLOOR_S = 0.70s` per non-barrage pattern in all three pools | AC-WS-06 |
+| `PRIMER_PATTERN` | At least one non-barrage pattern in the OPENER pool has `bIsPrimerEligible = true` | AC-WS-07 |
+| `PILLAR_1_VERB_SLIP` | At least one pattern in each non-empty pool has `bAllowsSlip = true` | AC-WS-08 |
+| `POOL_NON_EMPTY` | `count(p) ≥ 1` for every pool in `{OPENER, MID, PEAK}` (PEAK checked as combined barrage + non-barrage) | AC-WS-09 |
+| `PEAK_BASE_W_RANGE` | `0.15 ≤ base_w ≤ 0.40` where `base_w` is the unweighted barrage fraction tuning knob | AC-WS-32 |
+| `PEAK_BASE_W_BELOW_CEILING` | `base_w < W_CEILING` (G.1-configured cadence governor ceiling) — prevents F-3 proportional branch silent saturation | AC-WS-33 |
+| `MIN_BARRAGE_PATTERN_COUNT_PER_TRIPLET` | Each of the 7 surviving PEAK triplets has ≥ 1 authored pattern (note: `BARRAGE_DISTINCT_SOURCE_LANES` bounds the max to 1 as well) | AC-WS-34 |
+| `BARRAGE_UNIFORM_TIER` | All patterns in PEAK barrage sub-pool share the same `lean_magnitude_tier` | AC-WS-35 |
+| `BARRAGE_DISTINCT_SOURCE_LANES` | No two patterns in PEAK barrage sub-pool share the same sorted source-lane set | AC-WS-36 |
+
+> **Amendment note (2026-08-21)**: The original D4 table listed `PEAK_NO_ADJACENT_CLUSTER` and `POOL_SIZE_DERIVATION_MATCH` and omitted `MID_NO_BARRAGE` and `BARRAGE_W_SPAN`. Story 008 implementation resolved this: `PEAK_NO_ADJACENT_CLUSTER` is subsumed by `PEAK_SURVIVING_TRIPLETS` (the 3 excluded triplets are exactly the consecutive-lane ones); `POOL_SIZE_DERIVATION_MATCH` was simplified to `POOL_NON_EMPTY`. The D1 minimum-count wording was also corrected from "≥ 2 per triplet" to "≥ 1 per triplet" to be consistent with `BARRAGE_DISTINCT_SOURCE_LANES`.
 
 ### Architecture Diagram
 

@@ -9,6 +9,7 @@
 
 #include "WaveSpawner/WaveSpawnerSubsystem.h"
 #include "WaveSpawner/Wave.h"
+#include "WaveSpawner/WaveSpawnerCookTimeValidator.h"
 #include "RunStateMachine/RunStateMachineSubsystem.h"
 #include "DPC/DPCSubsystem.h"
 #include "UObject/CoreDelegates.h"
@@ -21,6 +22,10 @@
 // the subsystem header see the group declaration before the inline GetStatId().
 // ---------------------------------------------------------------------------
 DEFINE_LOG_CATEGORY_STATIC(LogWaveSpawner, Log, All);
+// Story 009: cycle stat definitions (AC-WS-30, TR-WS-030).
+// Declarations live in WaveSpawnerTypes.h (DECLARE_CYCLE_STAT_EXTERN).
+DEFINE_STAT(STAT_WaveSpawnerAdmissionTick);
+DEFINE_STAT(STAT_WaveSpawnerPoolAlloc);
 
 // ---------------------------------------------------------------------------
 // Stage 2 concurrency cap stub (Story 004 / ADR-0011 D2).
@@ -147,6 +152,10 @@ void UWaveSpawnerSubsystem::OnFirstWorldLoaded(UWorld* LoadedWorld)
     // somehow triggers additional delegate broadcasts (defensive, per VR-2 analysis).
     bPoolAllocated = true;
 
+    {
+        // Story 009: profile pool allocation time (AC-WS-30 / TR-WS-030).
+        SCOPE_CYCLE_COUNTER(STAT_WaveSpawnerPoolAlloc);
+
     // Pre-allocate 23 AWave actor instances (TR-WS-008, TR-PW-010).
     // Pool sizing rationale: 16 PEAK concurrency cap + 2 DESPAWNING latency slots
     // + 5 margin = 23. SpawnActor is legal here — LoadedWorld is valid and fully init'd.
@@ -166,6 +175,12 @@ void UWaveSpawnerSubsystem::OnFirstWorldLoaded(UWorld* LoadedWorld)
     UE_LOG(LogWaveSpawner, Log,
         TEXT("UWaveSpawnerSubsystem: Pool pre-allocated — 23 AWave actors (TR-WS-008). "
              "Pool persists across all death-replay cycles (EC-WS-8, ADR-0005)."));
+    } // end SCOPE_CYCLE_COUNTER(STAT_WaveSpawnerPoolAlloc)
+
+    // Story 009: validate pattern libraries and prune invalid entries immediately
+    // after actor pool allocation (AC-WS-27a/b). Must run after bPoolAllocated=true
+    // so that TransitionTo(Idle) in the critical-empty path has a legal spawner state.
+    ValidateAndPrunePoolsAtLoad();
 }
 
 // ============================================================================
@@ -207,6 +222,14 @@ void UWaveSpawnerSubsystem::OnDPCFrameReady(const FDPCFrameState& FrameState)
 #if !UE_BUILD_SHIPPING
     check(IsInGameThread());
 #endif
+
+    // Story 009: profile full admission-tick cost per DPC frame (AC-WS-30 / TR-WS-030).
+    // Placed after thread check but before all gates so the stat captures the full dispatch cost,
+    // including the Rule 1 lifecycle guard that most frames hit and exit early on.
+    SCOPE_CYCLE_COUNTER(STAT_WaveSpawnerAdmissionTick);
+
+    // Story 009: spawner permanently disabled at load (critical pool empty; AC-WS-27b).
+    if (bSpawnerDisabledAtLoad) { return; }
 
     // -------------------------------------------------------------------------
     // Rule 1 gate — per-frame prerequisite checks (TR-WS-012).
@@ -363,19 +386,31 @@ EAdmissionResult UWaveSpawnerSubsystem::TryAdmitPattern(const FDPCFrameState& Fr
             InFlightWaves.Add(Id2, { Id2, FrameState.TelegraphWindowS });
             bBarrageOwed = false;  // reservation fulfilled (AC-WS-12c / TR-WS-018)
             // Stage 4: draw from PeakPool.BarragePatterns; increments BarrageCountThisPeak (Story 005 / AC-WS-15).
-            DrawBarragePattern(FrameState);
+            if (DrawBarragePattern(FrameState))
+            {
+                // Story 009: pattern_admitted telemetry (AC-WS-25, TR-WS-019). Barrage = 3 slots.
+                EmitPatternAdmitted(Id0, /*bIsBarrage=*/true, /*SlotsCommitted=*/3, FrameState);
+            }
             return EAdmissionResult::Admitted;
         }
 
         // Barrage dropped: insufficient slots for the required atomic 3-slot pre-commitment.
         bBarrageOwed = true;  // reserve next available >=3 window (TR-WS-018)
 
-        // Telemetry call site (AC-WS-12b / TR-WS-019):
-        // barrage_dropped_due_to_concurrency event — infrastructure deferred to Story 009.
-        /* TODO Story 009: EmitTelemetry(TEXT("barrage_dropped_due_to_concurrency"), ...); */
+        // Story 009: barrage_dropped_due_to_concurrency telemetry (AC-WS-24 / TR-WS-019).
+        // Rate-limited 1 Hz to avoid log spam on sustained full-pool frames.
+        // DEVIATION NOTE (AC-WS-24): story spec mentions check(false) on Deferred_ConcurrencyCap.
+        // This is a valid runtime condition (high concurrency), not a programmer error.
+        // Implementation uses rate-limited telemetry without check(false); story owner to reconcile.
+        if (ShouldEmitRateLimited(LastBarrageDropTelemetryTimeS, 1.f))
+        {
+            TMap<FName, FString> Payload;
+            Payload.Add(FName(TEXT("AvailableSlots")), FString::FromInt(Available));
+            Payload.Add(FName(TEXT("BarrageOwed")),    TEXT("true"));
+            EmitTelemetry(FName(TEXT("barrage_dropped_due_to_concurrency")), Payload);
+        }
         UE_LOG(LogWaveSpawner, Verbose,
-            TEXT("WaveSpawner: barrage dropped — available=%d < 3; bBarrageOwed=true (TR-WS-018). "
-                 "/* TODO Story 009: emit barrage_dropped_due_to_concurrency */"),
+            TEXT("WaveSpawner: barrage dropped — available=%d < 3; bBarrageOwed=true (TR-WS-018, AC-WS-24)."),
             Available);
 
         // Non-barrage fallback: a single-slot admission is better than nothing (AC-WS-12b).
@@ -385,8 +420,12 @@ EAdmissionResult UWaveSpawnerSubsystem::TryAdmitPattern(const FDPCFrameState& Fr
             ScheduledSlots.Add(FallbackId);
             // Snapshot TelegraphWindowS for this barrage-fallback wave (TR-WS-022, Story 007).
             InFlightWaves.Add(FallbackId, { FallbackId, FrameState.TelegraphWindowS });
-            // Stage 4: barrage dropped; fallback draw from ActiveDrawPool.NonBarragePatterns (Story 005 / AC-WS-15).
-            DrawNonBarragePattern(FrameState);
+            // Stage 4: barrage dropped; fallback draw from ActiveDrawPool.NonBarragePatterns.
+            if (DrawNonBarragePattern(FrameState))
+            {
+                // Story 009: pattern_admitted (non-barrage fallback after dropped barrage). 1 slot.
+                EmitPatternAdmitted(FallbackId, /*bIsBarrage=*/false, /*SlotsCommitted=*/1, FrameState);
+            }
             return EAdmissionResult::Admitted;
         }
 
@@ -404,7 +443,11 @@ EAdmissionResult UWaveSpawnerSubsystem::TryAdmitPattern(const FDPCFrameState& Fr
         // Snapshot TelegraphWindowS for this non-barrage wave (TR-WS-022, Story 007 AC-WS-21/29).
         InFlightWaves.Add(NonBarrageId, { NonBarrageId, FrameState.TelegraphWindowS });
         // Stage 4: draw from ActiveDrawPool.NonBarragePatterns (Story 005 / AC-WS-15).
-        DrawNonBarragePattern(FrameState);
+        if (DrawNonBarragePattern(FrameState))
+        {
+            // Story 009: pattern_admitted telemetry (AC-WS-25, TR-WS-019). Non-barrage, 1 slot.
+            EmitPatternAdmitted(NonBarrageId, /*bIsBarrage=*/false, /*SlotsCommitted=*/1, FrameState);
+        }
         return EAdmissionResult::Admitted;
     }
 
@@ -480,7 +523,10 @@ bool UWaveSpawnerSubsystem::IsValidTransition(
     {
     case EWaveSpawnerLifecycleState::Cold:
         // Cold → Active  (RSM COUNTDOWN→RUNNING fires Cold→Active; RunSeed captured)
-        return To == EWaveSpawnerLifecycleState::Active;
+        // Cold → Idle    (ValidateAndPrunePoolsAtLoad(): critical pool empty at load;
+        //                  Story 009 / AC-WS-27b — bSpawnerDisabledAtLoad set permanently)
+        return To == EWaveSpawnerLifecycleState::Active
+            || To == EWaveSpawnerLifecycleState::Idle;
 
     case EWaveSpawnerLifecycleState::Active:
         // Active → Holding  (phase-boundary drain-window entry)
@@ -643,6 +689,13 @@ void UWaveSpawnerSubsystem::OnLifecycleTransition(EWaveSpawnerLifecycleState New
         PatternRNG           = FRandomStream();  // reinitialise to default; seed set at Cold→Active entry
         // Story 007: clear per-wave in-flight snapshots for the next run (TR-WS-022).
         InFlightWaves.Reset();
+        // Story 009: reset per-run telemetry rate-limit fields and dedup set (TR-WS-019).
+        // bSpawnerDisabledAtLoad intentionally NOT reset here — a load-time condition persists
+        // for the entire session and across all replay cycles (Story 009 / AC-WS-27b).
+        LastBarrageDropTelemetryTimeS    = -1.f;
+        LastPoolExhaustionTelemetryTimeS = -1.f;
+        LastEmptyPoolTelemetryTimeS      = -1.f;
+        ReportedInvalidPatternIds.Reset();
 #if WITH_DEV_AUTOMATION_TESTS
         LastDrawIndexForTest = INDEX_NONE;
 #endif
@@ -747,70 +800,89 @@ bool UWaveSpawnerSubsystem::ShouldDrawBarrage() const
 // GDD: design/gdd/wave-spawner-pattern-library.md Rule 8 (uniform random draw)
 // ============================================================================
 
-void UWaveSpawnerSubsystem::DrawNonBarragePattern(const FDPCFrameState& FrameState)
+bool UWaveSpawnerSubsystem::DrawNonBarragePattern(const FDPCFrameState& FrameState)
 {
     // Null-pool guard: ActiveDrawPool may be null in Cold state or before first Cold→Active.
     if (!ActiveDrawPool)
     {
-        /* TODO Story 009: EmitTelemetry(TEXT("empty_pool_at_draw"), TEXT("null_active_draw_pool")); */
+        // Story 009: empty_pool_at_draw telemetry (AC-WS-25, TR-WS-019). Rate-limited 1 Hz.
+        if (ShouldEmitRateLimited(LastEmptyPoolTelemetryTimeS, 1.f))
+        {
+            TMap<FName, FString> Payload;
+            Payload.Add(FName(TEXT("Reason")), TEXT("null_active_draw_pool"));
+            EmitTelemetry(FName(TEXT("empty_pool_at_draw")), Payload);
+        }
         UE_LOG(LogWaveSpawner, Warning,
-            TEXT("WaveSpawner: DrawNonBarragePattern — ActiveDrawPool is null (AC-WS-15). "
-                 "/* TODO Story 009: emit empty_pool_at_draw */"));
-        return;
+            TEXT("WaveSpawner: DrawNonBarragePattern — ActiveDrawPool is null (AC-WS-15, AC-WS-25)."));
+        return false;
     }
 
-    const TArray<FPatternDefinition>& Pool = ActiveDrawPool->NonBarragePatterns;
-    if (Pool.Num() == 0)
+    // Local ref named PatternPool to avoid shadowing the member TArray<AWave> Pool.
+    const TArray<FPatternDefinition>& PatternPool = ActiveDrawPool->NonBarragePatterns;
+    if (PatternPool.Num() == 0)
     {
-        /* TODO Story 009: EmitTelemetry(TEXT("empty_pool_at_draw"), TEXT("non_barrage_pool_empty")); */
+        // Story 009: empty_pool_at_draw telemetry (AC-WS-25, TR-WS-019). Rate-limited 1 Hz.
+        if (ShouldEmitRateLimited(LastEmptyPoolTelemetryTimeS, 1.f))
+        {
+            TMap<FName, FString> Payload;
+            Payload.Add(FName(TEXT("Reason")), TEXT("non_barrage_pool_empty"));
+            EmitTelemetry(FName(TEXT("empty_pool_at_draw")), Payload);
+        }
         UE_LOG(LogWaveSpawner, Warning,
-            TEXT("WaveSpawner: DrawNonBarragePattern — NonBarragePatterns pool is empty (AC-WS-15). "
-                 "/* TODO Story 009: emit empty_pool_at_draw */"));
-        return;
+            TEXT("WaveSpawner: DrawNonBarragePattern — NonBarragePatterns pool is empty (AC-WS-15, AC-WS-25)."));
+        return false;
     }
 
     // Uniform random selection — deterministic from PatternRNG seed (TR-WS-013, AC-WS-15).
-    const int32 Index = PatternRNG.RandRange(0, Pool.Num() - 1);
+    const int32 Index = PatternRNG.RandRange(0, PatternPool.Num() - 1);
 
 #if WITH_DEV_AUTOMATION_TESTS
     LastDrawIndexForTest = Index;
 #endif
 
-    // TODO Story 006: AdmitPattern(Pool[Index], FrameState, GetCurrentTimeS(), false /*bBarrage*/);
+    // TODO Story 006: AdmitPattern(PatternPool[Index], FrameState, GetCurrentTimeS(), false /*bBarrage*/);
     UE_LOG(LogWaveSpawner, Verbose,
         TEXT("WaveSpawner: DrawNonBarragePattern — drew index %d / %d (AC-WS-15). "
              "/* TODO Story 006: AdmitPattern */"),
-        Index, Pool.Num() - 1);
+        Index, PatternPool.Num() - 1);
     (void)FrameState;  // consumed by Story 006 AdmitPattern(); suppress unused-param until then
+    return true;
 }
 
-void UWaveSpawnerSubsystem::DrawBarragePattern(const FDPCFrameState& FrameState)
+bool UWaveSpawnerSubsystem::DrawBarragePattern(const FDPCFrameState& FrameState)
 {
-    const TArray<FPatternDefinition>& Pool = PeakPool.BarragePatterns;
-    if (Pool.Num() == 0)
+    // Local ref named PatternPool to avoid shadowing the member TArray<AWave> Pool.
+    const TArray<FPatternDefinition>& PatternPool = PeakPool.BarragePatterns;
+    if (PatternPool.Num() == 0)
     {
-        /* TODO Story 009: EmitTelemetry(TEXT("empty_pool_at_draw"), TEXT("barrage_pool_empty")); */
+        // Story 009: empty_pool_at_draw telemetry (AC-WS-25, TR-WS-019). Rate-limited 1 Hz.
+        if (ShouldEmitRateLimited(LastEmptyPoolTelemetryTimeS, 1.f))
+        {
+            TMap<FName, FString> Payload;
+            Payload.Add(FName(TEXT("Reason")), TEXT("barrage_pool_empty"));
+            EmitTelemetry(FName(TEXT("empty_pool_at_draw")), Payload);
+        }
         UE_LOG(LogWaveSpawner, Warning,
-            TEXT("WaveSpawner: DrawBarragePattern — BarragePatterns pool is empty (AC-WS-15). "
-                 "/* TODO Story 009: emit empty_pool_at_draw */"));
-        return;
+            TEXT("WaveSpawner: DrawBarragePattern — BarragePatterns pool is empty (AC-WS-15, AC-WS-25)."));
+        return false;
     }
 
     // Uniform random selection — deterministic from PatternRNG seed (TR-WS-013, AC-WS-15).
-    const int32 Index = PatternRNG.RandRange(0, Pool.Num() - 1);
+    const int32 Index = PatternRNG.RandRange(0, PatternPool.Num() - 1);
 
 #if WITH_DEV_AUTOMATION_TESTS
     LastDrawIndexForTest = Index;
 #endif
 
-    // TODO Story 006: AdmitPattern(Pool[Index], FrameState, GetCurrentTimeS(), true /*bBarrage*/);
+    // TODO Story 006: AdmitPattern(PatternPool[Index], FrameState, GetCurrentTimeS(), true /*bBarrage*/);
     // Increment AFTER the draw so a draw failure (empty pool guard above) does not inflate count.
     BarrageCountThisPeak++;
     UE_LOG(LogWaveSpawner, Verbose,
         TEXT("WaveSpawner: DrawBarragePattern — drew index %d / %d; BarrageCountThisPeak=%d (AC-WS-15). "
              "/* TODO Story 006: AdmitPattern */"),
-        Index, Pool.Num() - 1, BarrageCountThisPeak);
+        Index, PatternPool.Num() - 1, BarrageCountThisPeak);
     (void)FrameState;  // consumed by Story 006 AdmitPattern(); suppress unused-param until then
+    return true;
 }
 
 // ============================================================================
@@ -837,6 +909,12 @@ void UWaveSpawnerSubsystem::HandlePausedChanged(bool bIsPaused, double /*Timesta
             return;
         }
 
+        // Story 009: spawner permanently disabled at load; no flush action needed (AC-WS-27b).
+        if (bSpawnerDisabledAtLoad) { return; }
+
+        // Capture live count BEFORE the drain loop (DespawnWave removes from LiveSlots).
+        const int32 WavesFlushedCount = LiveSlots.Num();
+
         // Rule 13 pause-flush: drain all in-flight LiveSlots in WaveId ASC order (AC-WS-17).
         // DO NOT reset LastSpawnTimeS — TR-WS-027 mandates preservation across pause/resume.
         for (int32 WaveId : GetInFlightWaveIdsSorted())
@@ -853,6 +931,14 @@ void UWaveSpawnerSubsystem::HandlePausedChanged(bool bIsPaused, double /*Timesta
         // Clear ScheduledSlots — pre-committed but not yet live; no DespawnWave needed
         // (no pool actor is associated yet). Rule 13 scheduling cleanup (Story 007 / TR-WS-025).
         ScheduledSlots.Reset();
+
+        // Story 009: pause_flush_executed telemetry (AC-WS-26, TR-WS-019).
+        // Emitted BEFORE TransitionTo(Flushing) so tests can assert on lifecycle after event.
+        {
+            TMap<FName, FString> Payload;
+            Payload.Add(FName(TEXT("WavesFlushedCount")), FString::FromInt(WavesFlushedCount));
+            EmitTelemetry(FName(TEXT("pause_flush_executed")), Payload);
+        }
 
         // DEVIATION NOTE (Rule 13 / ADR-0011 D3): The TransitionTo() doc comment attributes
         // Active→Flushing to RSM terminal states only and describes the pause path as routing
@@ -881,6 +967,9 @@ void UWaveSpawnerSubsystem::HandlePausedChanged(bool bIsPaused, double /*Timesta
                 *UEnum::GetValueAsString(LifecycleState));
             return;
         }
+
+        // Story 009: spawner permanently disabled at load; resume is a no-op (AC-WS-27b).
+        if (bSpawnerDisabledAtLoad) { return; }
 
         // Set resume grace window: Rule 1 gate in OnDPCFrameReady vetoes admissions until
         // GetCurrentTimeS() >= ResumeGraceEndTimeS (cleared lazily on first post-grace tick).
@@ -937,6 +1026,9 @@ void UWaveSpawnerSubsystem::HandleRunStateChanged(
         return;
     }
 
+    // Capture live count BEFORE the drain loop (DespawnWave removes from LiveSlots).
+    const int32 WavesTerminatedCount = LiveSlots.Num();
+
     // Rule 14 run-termination: despawn all in-flight waves in WaveId ASC order (AC-WS-18).
     for (int32 WaveId : GetInFlightWaveIdsSorted())
     {
@@ -950,6 +1042,28 @@ void UWaveSpawnerSubsystem::HandleRunStateChanged(
     ScheduledSlots.Reset();
     // Clear barrage reservation — run is over; no next window to reserve (AC-WS-18, TR-WS-025).
     bBarrageOwed = false;
+
+    // Story 009: peak_min_barrage_floor_undershoot telemetry (AC-WS-23, TR-WS-019).
+    // Must emit BEFORE TransitionTo(Flushing) because OnLifecycleTransition(Cold)
+    // (entered via Flushing→Cold) resets BarrageCountThisPeak to 0.
+    // DEVIATION NOTE (AC-WS-23): story spec described emission on the Flushing→Cold
+    // forbidden-transition path. Implementation emits here on the run-termination path
+    // immediately before TransitionTo(Flushing); story owner to reconcile.
+    if (ActivePhase == ERunPhase::Peak && BarrageCountThisPeak < kTargetBarrages)
+    {
+        TMap<FName, FString> Payload;
+        Payload.Add(FName(TEXT("BarrageCountThisPeak")), FString::FromInt(BarrageCountThisPeak));
+        Payload.Add(FName(TEXT("kTargetBarrages")),      FString::FromInt(kTargetBarrages));
+        EmitTelemetry(FName(TEXT("peak_min_barrage_floor_undershoot")), Payload);
+    }
+
+    // Story 009: run_termination_flush_executed telemetry (AC-WS-26, TR-WS-019).
+    // Emitted BEFORE TransitionTo(Flushing) so lifecycle is still Active|Holding at emit time.
+    {
+        TMap<FName, FString> Payload;
+        Payload.Add(FName(TEXT("WavesTerminatedCount")), FString::FromInt(WavesTerminatedCount));
+        EmitTelemetry(FName(TEXT("run_termination_flush_executed")), Payload);
+    }
 
     // DEVIATION NOTE (AC-WS-18): Story AC-WS-18 specifies lifecycle → Idle after run termination.
     // ADR-0011 D3 is authoritative (same coordinator-approved precedent as the IsValidTransition
@@ -1043,4 +1157,197 @@ void UWaveSpawnerSubsystem::DespawnWave(int32 WaveId, EWaveDespawnReason Reason)
     // tests that inject LiveSlots directly (TestOnly_SetLiveCount), the AWave pool is
     // not populated — the warning is expected and does not indicate a production defect.
     ReleaseToPool(WaveId);
+}
+
+// ============================================================================
+// Story 009: Telemetry helpers (TR-WS-019)
+// AC-WS-24 (barrage drop), AC-WS-25 (admitted / empty), AC-WS-26 (flush),
+// AC-WS-27a/b (invalid pattern / critical pool), AC-WS-30 (cycle stat).
+// ============================================================================
+
+void UWaveSpawnerSubsystem::EmitTelemetry(FName EventName, const TMap<FName, FString>& Payload)
+{
+    UE_LOG(LogWaveSpawner, Verbose, TEXT("WaveSpawner telemetry: %s"), *EventName.ToString());
+#if WITH_DEV_AUTOMATION_TESTS
+    if (CapturedTelemetryEvents.Num() < kTelemetryCaptureCap)
+    {
+        FCapturedTelemetryEvent Evt;
+        Evt.EventName = EventName;
+        Evt.Payload   = Payload;
+        CapturedTelemetryEvents.Add(MoveTemp(Evt));
+    }
+    else
+    {
+        bTelemetryCaptureCapReached = true;
+    }
+#endif
+}
+
+bool UWaveSpawnerSubsystem::ShouldEmitRateLimited(float& LastEmitTimeS, float RateLimitS)
+{
+    // Sentinel -1.f on the backing field ensures the very first call at T=0 always fires
+    // (0 − (−1) = 1 >= any rate limit <= 1 Hz). If RateLimitS > 1, add a note here.
+    const float Now = GetCurrentTimeS();
+    if (Now - LastEmitTimeS < RateLimitS) { return false; }
+    LastEmitTimeS = Now;
+    return true;
+}
+
+void UWaveSpawnerSubsystem::EmitPatternAdmitted(
+    int32 WaveId, bool bIsBarrage, int32 SlotsCommitted, const FDPCFrameState& FrameState)
+{
+    TMap<FName, FString> Payload;
+    Payload.Add(FName(TEXT("WaveId")),          FString::FromInt(WaveId));
+    Payload.Add(FName(TEXT("PhasePool")),
+        StaticEnum<ERunPhase>()->GetNameStringByValue(static_cast<int64>(ActivePhase)).ToUpper());
+    Payload.Add(FName(TEXT("bIsBarrage")),       bIsBarrage ? TEXT("true") : TEXT("false"));
+    Payload.Add(FName(TEXT("SlotsCommitted")),   FString::FromInt(SlotsCommitted));
+    Payload.Add(FName(TEXT("TelegraphWindowS")), FString::SanitizeFloat(FrameState.TelegraphWindowS));
+    Payload.Add(FName(TEXT("AdmissionTimeS")),   FString::SanitizeFloat(GetCurrentTimeS()));
+    EmitTelemetry(FName(TEXT("pattern_admitted")), Payload);
+}
+
+void UWaveSpawnerSubsystem::ValidateAndPrunePoolsAtLoad()
+{
+    // -------------------------------------------------------------------------
+    // Step 1: Prune barrage patterns from Opener and Mid pools (Rule 15 / AC-WS-01, AC-WS-02).
+    // Barrage entries in these pools violate ADR-0011 D1 and must be removed at load time.
+    // Each pruned pattern emits pattern_asset_invalid_at_load (deduped by PatternId).
+    // -------------------------------------------------------------------------
+    auto PruneBarrageFromPool = [&](FPatternPool& PatPool, const FString& PoolName)
+    {
+        for (int32 i = PatPool.BarragePatterns.Num() - 1; i >= 0; --i)
+        {
+            const FPatternDefinition& Pat = PatPool.BarragePatterns[i];
+            if (!ReportedInvalidPatternIds.Contains(Pat.PatternId))
+            {
+                ReportedInvalidPatternIds.Add(Pat.PatternId);
+                TMap<FName, FString> Payload;
+                Payload.Add(FName(TEXT("PatternId")), Pat.PatternId.ToString());
+                Payload.Add(FName(TEXT("Pool")),      PoolName);
+                Payload.Add(FName(TEXT("Reason")),    TEXT("barrage_in_non_peak_pool"));
+                EmitTelemetry(FName(TEXT("pattern_asset_invalid_at_load")), Payload);
+                UE_LOG(LogWaveSpawner, Warning,
+                    TEXT("WaveSpawner ValidateAndPrune: removed barrage pattern '%s' from %s pool "
+                         "(AC-WS-01/02, Rule 15)."),
+                    *Pat.PatternId.ToString(), *PoolName);
+            }
+            PatPool.BarragePatterns.RemoveAt(i);
+        }
+    };
+    PruneBarrageFromPool(OpenerPool, TEXT("Opener"));
+    PruneBarrageFromPool(MidPool,    TEXT("Mid"));
+
+    // -------------------------------------------------------------------------
+    // Step 2: Prune invalid barrage entries from Peak pool (Rule 15 / AC-WS-03, AC-WS-27a).
+    // Invalid = LeanMagnitudeTier < 2 OR SourceLanes not in ValidPeakTriplets.
+    // DEVIATION NOTE (Decision 2): span and stagger checks (kTelegraphWindowFloorS,
+    // kBarrageWSpanMaxS) are private to FWaveSpawnerCookTimeValidator and not accessible
+    // here. Those checks are deferred to the full Validate() call in Step 3.
+    // -------------------------------------------------------------------------
+    for (int32 i = PeakPool.BarragePatterns.Num() - 1; i >= 0; --i)
+    {
+        const FPatternDefinition& Pat = PeakPool.BarragePatterns[i];
+        bool bInvalid = false;
+        FString InvalidReason;
+
+        if (Pat.LeanMagnitudeTier < 2)
+        {
+            bInvalid = true;
+            InvalidReason = TEXT("lean_magnitude_tier_below_2");
+        }
+        else
+        {
+            // Check SourceLanes against the 7 valid PEAK triplets.
+            const TArray<TArray<int32>>& Triplets = FWaveSpawnerCookTimeValidator::ValidPeakTriplets;
+            TArray<int32> SortedLanes = Pat.SourceLanes;
+            SortedLanes.Sort();
+            bool bTripletFound = false;
+            for (const TArray<int32>& Triplet : Triplets)
+            {
+                if (SortedLanes == Triplet) { bTripletFound = true; break; }
+            }
+            if (!bTripletFound)
+            {
+                bInvalid = true;
+                InvalidReason = TEXT("source_lanes_not_in_valid_peak_triplets");
+            }
+        }
+
+        if (bInvalid)
+        {
+            // B-1 fix (Story 009 review): RemoveAt hoisted out of dedup guard — mirrors Step 1
+            // shape. If two entries share the same PatternId and both fail, the second would
+            // previously skip RemoveAt (Contains returned true), leaving an invalid entry alive.
+            PeakPool.BarragePatterns.RemoveAt(i);
+            if (!ReportedInvalidPatternIds.Contains(Pat.PatternId))
+            {
+                ReportedInvalidPatternIds.Add(Pat.PatternId);
+                TMap<FName, FString> Payload;
+                Payload.Add(FName(TEXT("PatternId")), Pat.PatternId.ToString());
+                Payload.Add(FName(TEXT("Pool")),      TEXT("Peak"));
+                Payload.Add(FName(TEXT("Reason")),    InvalidReason);
+                EmitTelemetry(FName(TEXT("pattern_asset_invalid_at_load")), Payload);
+                UE_LOG(LogWaveSpawner, Warning,
+                    TEXT("WaveSpawner ValidateAndPrune: removed invalid barrage '%s' from Peak pool "
+                         "(%s, AC-WS-27a, Rule 15)."),
+                    *Pat.PatternId.ToString(), *InvalidReason);
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Step 3: Full cook-time validation pass (Rule 15, 14 binding checks).
+    // Errors are Warning-level — they surface in testing / cook logs but do not
+    // assert in production. Critical-empty detection (Step 4) is the action gate.
+    // -------------------------------------------------------------------------
+    const TArray<FString> ValidationErrors =
+        FWaveSpawnerCookTimeValidator::Validate(OpenerPool, MidPool, PeakPool, kBaseW, kWCeiling);
+    for (const FString& Err : ValidationErrors)
+    {
+        UE_LOG(LogWaveSpawner, Warning,
+            TEXT("WaveSpawner ValidateAndPrune — Rule 15 error: %s"), *Err);
+    }
+
+    // -------------------------------------------------------------------------
+    // Step 4: Critical-pool-empty detection.
+    // If any pool required for live gameplay is empty after pruning, the spawner
+    // cannot run this session. Emit critical_pool_empty_post_load and transition
+    // Cold → Idle (bSpawnerDisabledAtLoad permanently blocks all future paths).
+    // -------------------------------------------------------------------------
+    const bool bOpenerNonBarrageEmpty = (OpenerPool.NonBarragePatterns.Num() == 0);
+    const bool bMidNonBarrageEmpty    = (MidPool.NonBarragePatterns.Num() == 0);
+    const bool bPeakBarrageEmpty      = (PeakPool.BarragePatterns.Num() == 0);
+    const bool bPeakNonBarrageEmpty   = (PeakPool.NonBarragePatterns.Num() == 0);
+
+    if (bOpenerNonBarrageEmpty || bMidNonBarrageEmpty || bPeakBarrageEmpty || bPeakNonBarrageEmpty)
+    {
+        FString EmptyPoolList;
+        if (bOpenerNonBarrageEmpty) EmptyPoolList += TEXT("Opener.NonBarrage ");
+        if (bMidNonBarrageEmpty)    EmptyPoolList += TEXT("Mid.NonBarrage ");
+        if (bPeakBarrageEmpty)      EmptyPoolList += TEXT("Peak.Barrage ");
+        if (bPeakNonBarrageEmpty)   EmptyPoolList += TEXT("Peak.NonBarrage ");
+
+        TMap<FName, FString> Payload;
+        Payload.Add(FName(TEXT("EmptyPools")), EmptyPoolList.TrimEnd());
+        EmitTelemetry(FName(TEXT("critical_pool_empty_post_load")), Payload);
+
+        UE_LOG(LogWaveSpawner, Error,
+            TEXT("WaveSpawner: critical pool(s) empty after load-time pruning — spawner disabled. "
+                 "EmptyPools: [%s] (AC-WS-27b, Story 009). Transitioning Cold→Idle."),
+            *EmptyPoolList.TrimEnd());
+
+        // W-1 guard (Story 009 review): TransitionTo(Idle) is only valid from Cold (ADR-0011 D3).
+        // In production, OnFirstWorldLoaded always invokes this from Cold. The TestOnly_Trigger
+        // seam may be called from any state — guard prevents check(false) abort in non-Shipping.
+        if (LifecycleState != EWaveSpawnerLifecycleState::Cold)
+        {
+            UE_LOG(LogWaveSpawner, Warning,
+                TEXT("WaveSpawner: ValidateAndPrunePoolsAtLoad critical-empty branch reached from "
+                     "non-Cold state — TransitionTo(Idle) skipped (W-1, Story 009 review)."));
+            return;
+        }
+        bSpawnerDisabledAtLoad = true;
+        TransitionTo(EWaveSpawnerLifecycleState::Idle);
+    }
 }

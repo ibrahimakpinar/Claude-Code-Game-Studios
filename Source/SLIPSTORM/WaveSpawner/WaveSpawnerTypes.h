@@ -29,6 +29,12 @@
 // AC-WS-30: admission-tick CPU <= 0.30ms p99 profiled under this stat scope.
 // ---------------------------------------------------------------------------
 DECLARE_STATS_GROUP(TEXT("WaveSpawner"), STATGROUP_WaveSpawner, STATCAT_Advanced);
+// AC-WS-30: cycle stats for admission-tick and pool-alloc profiling (Story 009 / TR-WS-030).
+// DEFINE_STAT counterparts live in WaveSpawnerSubsystem.cpp.
+// Empty 4th arg matches the STATGROUP_PullWave pattern in PullWaveTypes.h (no export needed here;
+// the group is defined in the same TU that includes this header via the subsystem).
+DECLARE_CYCLE_STAT_EXTERN(TEXT("WaveSpawner Admission Tick"), STAT_WaveSpawnerAdmissionTick, STATGROUP_WaveSpawner, );
+DECLARE_CYCLE_STAT_EXTERN(TEXT("WaveSpawner Pool Alloc"),     STAT_WaveSpawnerPoolAlloc,     STATGROUP_WaveSpawner, );
 
 // ---------------------------------------------------------------------------
 // EWaveSpawnerLifecycleState
@@ -105,6 +111,62 @@ struct SLIPSTORM_API FPatternDefinition
      */
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
     bool bIsBarrage = false;
+
+    /**
+     * Source lane indices. Barrage patterns use exactly 3 distinct lane indices (the
+     * "triplet"). Non-barrage patterns use 1 or more lanes (typically 1). Lanes are
+     * 0-indexed; valid range [0, 4] for a 5-lane level.
+     *
+     * Used by the cook-time validator (Story 008):
+     *   PEAK_SURVIVING_TRIPLETS — barrage sub-pool covers exactly the 7 valid triplets.
+     *   MIN_BARRAGE_PATTERN_COUNT_PER_TRIPLET — each of 7 triplets has >= 1 pattern.
+     *   BARRAGE_DISTINCT_SOURCE_LANES — no two PEAK barrage patterns share the same lane set.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    TArray<int32> SourceLanes;
+
+    /**
+     * Telegraph onset times in seconds, relative to the spawn trigger (first onset = 0.0f).
+     * Entries must be in ascending order.
+     *
+     * Cook-time constraints (Rule 15, AC-WS-05/06):
+     *   Barrage patterns     — all onsets must cluster within TELEGRAPH_WINDOW_FLOOR_S / 2 = 0.35s
+     *                          (BARRAGE_W_SPAN check).
+     *   Non-barrage patterns — consecutive onset gaps must each be >= TELEGRAPH_WINDOW_FLOOR_S = 0.70s
+     *                          (NON_BARRAGE_STAGGER check).
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    TArray<float> OnsetTimes;
+
+    /**
+     * Lean magnitude tier (1, 2, or 3) controlling the Pull-Wave's approach lean angle.
+     *
+     * Cook-time constraints (Rule 15, AC-WS-04/35):
+     *   PEAK_BARRAGE_MIN_TIER   — PEAK barrage patterns require tier >= 2 (tier-1 banned).
+     *   BARRAGE_UNIFORM_TIER    — all PEAK barrage patterns must share the same tier value.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    int32 LeanMagnitudeTier = 1;
+
+    /**
+     * True if this pattern is eligible to serve as the primer (first wave spawned during
+     * the OPENER phase per Rule 9b). At least one primer-eligible non-barrage pattern is
+     * required in the OPENER pool.
+     *
+     * Cook-time constraint: PRIMER_PATTERN check (AC-WS-07, Rule 15).
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    bool bIsPrimerEligible = false;
+
+    /**
+     * True if this pattern allows the player to make a SLIP (lane-transition) verb move
+     * while the wave is approaching. At least one pattern in each non-empty pool must
+     * have this set to true.
+     *
+     * Cook-time constraint: PILLAR_1_VERB_SLIP check (AC-WS-08, Rule 15).
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    bool bAllowsSlip = false;
 };
 
 // ---------------------------------------------------------------------------

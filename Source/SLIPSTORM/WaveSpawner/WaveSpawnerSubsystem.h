@@ -496,14 +496,14 @@ public:
      * Bypasses TryAdmitPattern — no ShouldDrawBarrage call, no slot accounting.
      * Story 005 / AC-WS-15.
      */
-    void TestOnly_DrawNonBarragePattern(const FDPCFrameState& F) { DrawNonBarragePattern(F); }
+    bool TestOnly_DrawNonBarragePattern(const FDPCFrameState& F) { return DrawNonBarragePattern(F); }
 
     /**
      * Test-only: directly calls DrawBarragePattern() for counter and pool tests.
      * Bypasses TryAdmitPattern — no ShouldDrawBarrage call, no slot accounting.
      * Story 005 / AC-WS-15.
      */
-    void TestOnly_DrawBarragePattern(const FDPCFrameState& F) { DrawBarragePattern(F); }
+    bool TestOnly_DrawBarragePattern(const FDPCFrameState& F) { return DrawBarragePattern(F); }
 
     /**
      * Test-only: returns the pool index selected by the most recent Draw*Pattern() call.
@@ -1032,21 +1032,23 @@ private:
     /**
      * Stage 4: Draw one pattern from the non-barrage sub-pool of the active phase pool.
      * Uniform random selection via PatternRNG.RandRange(0, Pool.Num()-1).
-     * Empty-pool guard: logs warning and returns without crashing (AC-WS-15).
+     * Empty-pool guard: emits empty_pool_at_draw telemetry and returns false (AC-WS-15, AC-WS-25).
      * FrameState held for Story 006 AdmitPattern() integration (stub uses TODO comment).
-     * Story 005 / AC-WS-15.
+     * Returns true if a pattern was actually selected; false if pool was empty/null.
+     * Story 005 / AC-WS-15; bool return added Story 009 / AC-WS-25.
      */
-    void DrawNonBarragePattern(const FDPCFrameState& FrameState);
+    bool DrawNonBarragePattern(const FDPCFrameState& FrameState);
 
     /**
      * Stage 4: Draw one pattern from PeakPool.BarragePatterns.
      * Uniform random selection via PatternRNG.RandRange(0, Pool.Num()-1).
      * Increments BarrageCountThisPeak by 1 on each successful draw.
-     * Empty-pool guard: logs warning and returns without crashing (AC-WS-15).
+     * Empty-pool guard: emits empty_pool_at_draw telemetry and returns false (AC-WS-15, AC-WS-25).
      * FrameState held for Story 006 AdmitPattern() integration (stub uses TODO comment).
-     * Story 005 / AC-WS-15.
+     * Returns true if a pattern was actually selected; false if pool was empty.
+     * Story 005 / AC-WS-15; bool return added Story 009 / AC-WS-25.
      */
-    void DrawBarragePattern(const FDPCFrameState& FrameState);
+    bool DrawBarragePattern(const FDPCFrameState& FrameState);
 
     // =========================================================================
     // Story 005: F-3 governor fields + RNG
@@ -1121,6 +1123,60 @@ private:
      */
     static constexpr float kResumeGraceS   = 1.5f;
 
+    // =========================================================================
+    // Story 009: Telemetry infrastructure (TR-WS-019)
+    // Rate-limit fields, dedup set, spawner-disabled flag, and helper declarations.
+    // AC-WS-24 (barrage_dropped), AC-WS-25 (pattern_admitted / empty_pool_at_draw),
+    // AC-WS-26 (flush telemetry), AC-WS-27a/b (invalid pattern / critical pool empty).
+    // Production builds retain these lightweight fields (2 floats sentinel + TSet<FName>).
+    // =========================================================================
+
+    /**
+     * Sentinel -1.f ensures ShouldEmitRateLimited fires at T=0 in headless tests.
+     * Assumes all rate limits are <= 1s. If a longer RateLimitS is introduced,
+     * the first event would be silently suppressed — update this note and the sentinel if needed.
+     */
+    float LastBarrageDropTelemetryTimeS    = -1.f;
+    float LastPoolExhaustionTelemetryTimeS = -1.f;
+    float LastEmptyPoolTelemetryTimeS      = -1.f;
+
+    /** Dedup set for pattern_asset_invalid_at_load events keyed on FPatternDefinition.PatternId.
+     *  Reset at Cold entry alongside rate-limit fields (per-run dedup). */
+    TSet<FName> ReportedInvalidPatternIds;
+
+    /**
+     * Set permanently by ValidateAndPrunePoolsAtLoad() when a critical pool is empty
+     * after invalid-pattern pruning. NOT reset at Cold entry — this is a load-time condition
+     * that persists for the entire session and across replay cycles.
+     * Checked in HandlePausedChanged (both branches) and OnDPCFrameReady. Story 009 / AC-WS-27b.
+     */
+    bool bSpawnerDisabledAtLoad = false;
+
+    /** Emit a named telemetry event with a key→value payload. Story 009 / TR-WS-019. */
+    void EmitTelemetry(FName EventName, const TMap<FName, FString>& Payload);
+
+    /**
+     * Rate-limit helper: returns true and updates LastEmitTimeS only if enough time has
+     * passed since the last emission. NOT const — mutates the LastEmitTimeS float ref.
+     */
+    bool ShouldEmitRateLimited(float& LastEmitTimeS, float RateLimitS);
+
+    /**
+     * Emit pattern_admitted telemetry on a successful TryAdmitPattern draw.
+     * SlotsCommitted is 3 for a full barrage, 1 for a non-barrage or barrage fallback.
+     * Story 009 / AC-WS-25.
+     */
+    void EmitPatternAdmitted(int32 WaveId, bool bIsBarrage, int32 SlotsCommitted, const FDPCFrameState& FrameState);
+
+    /**
+     * Validate all three pool libraries against Rule 15 binding checks and prune invalid entries.
+     * Called at OnFirstWorldLoaded() after the actor pool is pre-allocated.
+     * If any critical pool becomes empty after pruning, emits critical_pool_empty_post_load
+     * telemetry and transitions Cold→Idle (spawner permanently disabled for the session).
+     * Story 009 / AC-WS-27a/b.
+     */
+    void ValidateAndPrunePoolsAtLoad();
+
 #if WITH_DEV_AUTOMATION_TESTS
     // Backing fields for the GetCurrentTimeS() test seam.
     // TestOnly_SetCurrentTimeOverride() activates the override; production builds
@@ -1133,5 +1189,78 @@ private:
     // INDEX_NONE until first draw fires in this session; reset to INDEX_NONE in Cold case.
     // Story 005 / AC-WS-15.
     int32 LastDrawIndexForTest = INDEX_NONE;
+
+    // -------------------------------------------------------------------------
+    // Story 009: in-test telemetry capture (AC-WS-24 through AC-WS-27).
+    // EmitTelemetry() appends here when compiled with automation tests.
+    // Capped at kTelemetryCaptureCap to bound memory in long-running test suites.
+    // -------------------------------------------------------------------------
+    struct FCapturedTelemetryEvent { FName EventName; TMap<FName, FString> Payload; };
+    static constexpr int32 kTelemetryCaptureCap = 64;
+    TArray<FCapturedTelemetryEvent> CapturedTelemetryEvents;
+    bool bTelemetryCaptureCapReached = false;
+
+    /** Reset capture state between test cases. */
+    void TestOnly_ResetTelemetryCapture()
+    {
+        CapturedTelemetryEvents.Reset();
+        bTelemetryCaptureCapReached = false;
+    }
+
+    /** Returns true if any captured event has the given name. */
+    bool TestOnly_WasEventEmitted(FName EventName) const
+    {
+        for (const FCapturedTelemetryEvent& E : CapturedTelemetryEvents)
+        {
+            if (E.EventName == EventName) { return true; }
+        }
+        return false;
+    }
+
+    /** Returns the count of captured events with the given name (for rate-limit assertions). */
+    int32 TestOnly_CountEvents(FName EventName) const
+    {
+        int32 Count = 0;
+        for (const FCapturedTelemetryEvent& E : CapturedTelemetryEvents)
+        {
+            if (E.EventName == EventName) { ++Count; }
+        }
+        return Count;
+    }
+
+    /** Returns the payload field value from the most recent matching event (reverse search). */
+    FString TestOnly_GetLastEventPayload(FName EventName, FName Field) const
+    {
+        for (int32 i = CapturedTelemetryEvents.Num() - 1; i >= 0; --i)
+        {
+            if (CapturedTelemetryEvents[i].EventName == EventName)
+            {
+                const FString* Val = CapturedTelemetryEvents[i].Payload.Find(Field);
+                return Val ? *Val : FString();
+            }
+        }
+        return FString();
+    }
+
+    /** Inject non-barrage patterns into MidPool for ValidateAndPrunePoolsAtLoad tests. */
+    void TestOnly_InjectMidPool(const TArray<FPatternDefinition>& Patterns)
+    {
+        MidPool.NonBarragePatterns = Patterns;
+    }
+
+    /** Inject non-barrage patterns into PeakPool for ValidateAndPrunePoolsAtLoad tests. */
+    void TestOnly_InjectPeakNonBarragePool(const TArray<FPatternDefinition>& Patterns)
+    {
+        PeakPool.NonBarragePatterns = Patterns;
+    }
+
+    /**
+     * Expose TryAdmitPattern via LastAdmissionResult for TC1/TC6 without routing through
+     * the full OnDPCFrameReady lifecycle guards. Story 009.
+     */
+    void TestOnly_TryAdmitPattern(const FDPCFrameState& F) { LastAdmissionResult = TryAdmitPattern(F); }
+
+    /** Trigger ValidateAndPrunePoolsAtLoad() directly for TC5/TC7 pool validation tests. */
+    void TestOnly_TriggerValidateAndPrunePoolsAtLoad() { ValidateAndPrunePoolsAtLoad(); }
 #endif
 };

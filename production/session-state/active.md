@@ -262,3 +262,133 @@ Also landed in `b94da6e`: TR-PW-027 wording fix + Cross-ADR Forward Contract Clo
 - Code review: Complete — CHANGES REQUIRED verdict resolved (3 required + 5 suggestions applied)
 - Test file: Source/SLIPSTORM/Tests/Unit/WaveSpawner/WaveSpawnerBarrageAdmissionTest.cpp (9 TCs: TC1–TC9 including TC8 rewrite + TC9 boundary test)
 - Next recommended: Wave Spawner Story 005 — Pattern Draw + Cadence Governor (F-3) + RNG Seeding — production/epics/wave-spawner/story-005-pattern-draw-and-cadence-governor.md
+
+## Session Extract — /story-done 2026-08-20
+- Verdict: COMPLETE WITH NOTES
+- Story: production/epics/wave-spawner/story-005-pattern-draw-and-cadence-governor.md — Pattern Draw + Cadence Governor (F-3) + RNG Seeding
+- Tech debt logged: None (6 advisory deviations documented in Completion Notes; all by design — Story 007 scope)
+- Code review: Deferred to sprint close-out (user selected "No — I'll run /code-review before sprint close-out")
+- Wall-clock seed enforcement: manual grep only — `grep -rn "FDateTime|FMath::Rand\b|rand()|time(|FPlatformTime" Source/SLIPSTORM/WaveSpawner/WaveSpawnerSubsystem.cpp` must return 0 matches
+- Next recommended: Story 006 — Despawn Pipeline + IWaveSpawnerCallback + Seam 13 (production/epics/wave-spawner/story-006-despawn-pipeline-and-seam-13.md)
+
+## Session Extract — /dev-story 2026-08-20 (Wave Spawner Story 006)
+- Story: production/epics/wave-spawner/story-006-despawn-pipeline-and-seam-13.md — Despawn Pipeline + IWaveSpawnerCallback + Seam 13
+- Files modified:
+  - Source/SLIPSTORM/SLIPSTORM.Build.cs (CppStandard = CppStandardVersion.Cpp20 added)
+  - Source/SLIPSTORM/WaveSpawner/WaveSpawnerTypes.h (EWaveDespawnReason enum appended, None=0 sentinel)
+  - Source/SLIPSTORM/WaveSpawner/WaveSpawnerSubsystem.h (SetDespawnCallback, DespawnWave public; IWaveSpawnerCallback* Callback private; include added)
+  - Source/SLIPSTORM/WaveSpawner/WaveSpawnerSubsystem.cpp (DespawnWave() Rule 12 pipeline appended)
+- Files created:
+  - Source/SLIPSTORM/Seam/WaveSpawnerCallback.h (IWaveSpawnerCallback pure C++ interface)
+  - Source/SLIPSTORM/Seam/WaveSpawnerCallbackTestStub.h (FDespawnEvent + FWaveSpawnerCallbackTestStub + C++20 static_assert, !UE_BUILD_SHIPPING guard)
+  - Source/SLIPSTORM/Tests/Integration/WaveSpawner/WaveSpawnerDespawnPipelineTest.cpp (5 TCs: TC1-TC3 AC-WS-16 ×3 reasons, TC4 AC-WS-19, TC5 AC-WS-20)
+- TestOnly_SetLiveCount already exists (Story 004); kTestWaveId=-1001 correct
+- Blockers: None
+- Next: /code-review then /story-done production/epics/wave-spawner/story-006-despawn-pipeline-and-seam-13.md
+
+## Session Extract — /story-done 2026-08-20
+- Verdict: COMPLETE WITH NOTES
+- Story: production/epics/wave-spawner/story-006-despawn-pipeline-and-seam-13.md — Despawn Pipeline + IWaveSpawnerCallback + Seam 13
+- Tech debt logged: None (2 advisory deviations documented in Completion Notes)
+- Code review: Complete — /code-review passed before close
+- Next recommended: Story 007 — RSM/DPC Integration — production/epics/wave-spawner/story-007-rsm-dpc-integration.md
+
+## Session Extract — /dev-story 2026-08-20
+- Story: production/epics/wave-spawner/story-007-rsm-dpc-integration.md — RSM/DPC Integration — Pause Flush, Run Termination, Snapshot Immutability
+- Files modified:
+  - Source/SLIPSTORM/RunStateMachine/RunStateMachineSubsystem.h (GetRunSeed() declaration added — cross-boundary stub, RSM epic TODO)
+  - Source/SLIPSTORM/RunStateMachine/RunStateMachineSubsystem.cpp (GetRunSeed() stub body — returns 0)
+  - Source/SLIPSTORM/WaveSpawner/WaveSpawnerTypes.h (FWaveInFlightState plain C++ struct added)
+  - Source/SLIPSTORM/WaveSpawner/WaveSpawnerSubsystem.h (RSMSubsystem*, RSMPausedHandle, RSMStateHandle, RunSeed, InFlightWaves, kResumeGraceS; 4 method decls; 4 TestOnly seams)
+  - Source/SLIPSTORM/WaveSpawner/WaveSpawnerSubsystem.cpp (RSM wiring Init/Deinit; OnLifecycleTransition RNG fix + InFlightWaves.Reset + PeakEntryTimeS; DespawnWave InFlightWaves.Remove; TryAdmitPattern snapshot capture ×3; HandlePausedChanged, HandleRunStateChanged, OnResumeFromPause, GetInFlightWaveIdsSorted implemented)
+- Files created:
+  - Source/SLIPSTORM/Tests/Integration/WaveSpawner/WaveSpawnerRSMDPCIntegrationTest.cpp (5 TCs: TC1-TC2 AC-WS-17, TC3 AC-WS-18, TC4 AC-WS-21+29, TC5 AC-WS-28)
+- Deviations:
+  - DEV-1: AC-WS-18 lifecycle → Cold (not Idle per AC text); Flushing→Idle is forbidden in ADR-0011 D3; story file updated
+  - DEV-2: Rule 13 flush is synchronous (not deferred via bPauseFlushPending); may warrant follow-up
+  - DEV-3: PeakEntryTimeS uses GetCurrentTimeS() seam (not GetWorld()->GetTimeSeconds())
+- Blockers: Test evidence pending compile + headless run (UBT -nullrhi)
+- Next: /code-review Source/SLIPSTORM/WaveSpawner/WaveSpawnerSubsystem.h Source/SLIPSTORM/WaveSpawner/WaveSpawnerSubsystem.cpp Source/SLIPSTORM/Tests/Integration/WaveSpawner/WaveSpawnerRSMDPCIntegrationTest.cpp production/epics/wave-spawner/story-007-rsm-dpc-integration.md then /story-done
+
+## Session Extract — /code-review 2026-08-21
+- Story: production/epics/wave-spawner/story-007-rsm-dpc-integration.md — RSM/DPC Integration
+- Verdict: CHANGES REQUIRED → APPROVED (all fixes applied in same pass)
+- BLOCKING fix (B-1): InFlightWaves orphan leak on pause flush — ScheduledSlots.Reset() was
+  discarding scheduled wave IDs without removing their InFlightWaves entries; fixed by adding
+  PurgeScheduledInFlightEntries() helper called before both ScheduledSlots.Reset() sites
+  (pause flush and run termination).
+- Files modified by code-review pass:
+  - WaveSpawnerSubsystem.h: PurgeScheduledInFlightEntries() declaration; W-1 TransitionTo doc
+    comment corrected (Active→Flushing now lists pause-flush trigger; Holding→Flushing now says
+    OnPausedChanged(true)); W-2 kResumeGraceS TODO(RSM epic) cross-reference; W-3b ADR filename
+    fixed (adr-0007-run-state-machine-hosting.md)
+  - WaveSpawnerSubsystem.cpp: PurgeScheduledInFlightEntries() implementation; B-1 fix in both
+    HandlePausedChanged + HandleRunStateChanged; W-1 DEVIATION NOTE added; W-2 TODO in
+    OnResumeFromPause; W-3b ADR filename fixed
+  - WaveSpawnerRSMDPCIntegrationTest.cpp: S1 TC3 ScheduledCount non-trivial arrange; S2 TC6/TC7
+    COMPLETE+ABORTED branches; S3 TC8 HandlePausedChanged(false) causal path; S4 TC9 pause flush
+    from Holding; W-3b ADR filename fixed; 9 total test commands (was 5)
+  - story-007-rsm-dpc-integration.md: W-3a stale signatures fixed (OnStateChanged, 2-param/4-param);
+    Test Evidence updated to 9 commands; Last Updated 2026-08-21
+- Blockers: Test evidence pending compile + headless run (UBT -nullrhi)
+- Next: /story-done production/epics/wave-spawner/story-007-rsm-dpc-integration.md
+
+## Session Extract — /story-done 2026-08-21
+- Verdict: COMPLETE WITH NOTES
+- Story: production/epics/wave-spawner/story-007-rsm-dpc-integration.md — RSM/DPC Integration — Pause Flush, Run Termination, Snapshot Immutability
+- Tech debt logged: 4 items → docs/tech-debt-register.md (created)
+  1. AC-WS-18 lifecycle → Cold (ADR-0011 D3 correction)
+  2. Rule 13 pause path Active→Flushing direct (no Holding hop)
+  3. kResumeGraceS stub + TODO(RSM epic) IsResumeGrace() convergence
+  4. GetRunSeed() cross-boundary stub (returns 0 until RSM epic)
+- Next recommended: Story 008 — Cook-Time Validator (14 Binding Rule 15 Checks) — production/epics/wave-spawner/story-008-cook-time-validator.md
+
+## Session Extract — /dev-story 2026-08-21 (Wave Spawner Story 008)
+- Story: production/epics/wave-spawner/story-008-cook-time-validator.md — Cook-Time Validator (14 Binding Rule 15 Checks)
+- Files changed:
+  - Source/SLIPSTORM/WaveSpawner/WaveSpawnerTypes.h (EDITED — extended FPatternDefinition with 5 cook-time fields: SourceLanes, OnsetTimes, LeanMagnitudeTier, bIsPrimerEligible, bAllowsSlip)
+  - Source/SLIPSTORM/WaveSpawner/WaveSpawnerCookTimeValidator.h (CREATED — UWaveSpawnerCookTimeValidator static class, 14 check declarations + utility helpers)
+  - Source/SLIPSTORM/WaveSpawner/WaveSpawnerCookTimeValidator.cpp (CREATED — all 14 Rule 15 check implementations + ValidPeakTriplets static data)
+  - Source/SLIPSTORM/Tests/Unit/WaveSpawner/WaveSpawnerCookTimeValidatorTest.cpp (CREATED — 15 test commands: TC1-TC14 fail-case per check + TC15 all-pass)
+- Test written: Source/SLIPSTORM/Tests/Unit/WaveSpawner/WaveSpawnerCookTimeValidatorTest.cpp (15 commands)
+- Design decisions:
+  - FPatternDefinition extended in WaveSpawnerTypes.h (Story 001's stub; these fields were deferred to "Story 003+" per comment; Story 008 is the cook-time consumer so adding here is correct)
+  - UWaveSpawnerCookTimeValidator is plain C++ static class (not UCLASS) — U prefix matches story spec; SLIPSTORM_API provides DLL export
+  - Validate() runs all 14 checks without short-circuit (full error list always returned)
+  - PEAK_SURVIVING_TRIPLETS and MIN_BARRAGE_PATTERN_COUNT_PER_TRIPLET are separate checks with distinct error IDs; both fire when a triplet is absent
+  - TC14 (BARRAGE_DISTINCT_SOURCE_LANES) uses 8-pattern pool (7 distinct + 1 duplicate); 7 distinct triplets still present so PEAK_SURVIVING_TRIPLETS does NOT fire — isolates the check
+  - kTelegraphWindowFloorS = 0.70f, kBarrageWSpanMaxS = 0.35f defined as private constexpr in validator header
+- Blockers: Test evidence pending compile + headless run via UBT -nullrhi
+- Next: /code-review Source/SLIPSTORM/WaveSpawner/WaveSpawnerCookTimeValidator.h Source/SLIPSTORM/WaveSpawner/WaveSpawnerCookTimeValidator.cpp Source/SLIPSTORM/Tests/Unit/WaveSpawner/WaveSpawnerCookTimeValidatorTest.cpp then /story-done production/epics/wave-spawner/story-008-cook-time-validator.md
+
+## Session Extract — /story-done 2026-08-21
+- Verdict: COMPLETE WITH NOTES
+- Story: production/epics/wave-spawner/story-008-cook-time-validator.md — Cook-Time Validator (14 Binding Rule 15 Checks)
+- Files changed: Source/SLIPSTORM/WaveSpawner/WaveSpawnerCookTimeValidator.h, Source/SLIPSTORM/WaveSpawner/WaveSpawnerCookTimeValidator.cpp, Source/SLIPSTORM/Tests/Unit/WaveSpawner/WaveSpawnerCookTimeValidatorTest.cpp, Source/SLIPSTORM/WaveSpawner/WaveSpawnerTypes.h (5 new fields), docs/architecture/adr-0011-wave-spawner-pattern-library.md (D4 amended), production/epics/wave-spawner/story-008-cook-time-validator.md (Status: Complete)
+- Code review fixes applied: U→F rename (FWaveSpawnerCookTimeValidator), removed Algo/Sort.h include, removed redundant static from anon-namespace helper, fixed TC4 duplicate assertion → BARRAGE_UNIFORM_TIER check
+- Advisory tech debt: GAP-1 through GAP-8 (pool-dispatch arm test gaps — NON_BARRAGE_STAGGER MID/PEAK, PILLAR_1_VERB_SLIP OPENER/PEAK, POOL_NON_EMPTY MID/PEAK, extra-triplet path, unsorted SourceLanes) — recommend follow-up in Story 009 scope
+- Next: /dev-story production/epics/wave-spawner/story-009-telemetry-and-edge-case-defense.md
+
+## Session Extract — /dev-story 2026-08-21 (Wave Spawner Story 009)
+- Story: production/epics/wave-spawner/story-009-telemetry-and-edge-case-defense.md — Telemetry + Edge-Case Defense + Performance Baseline
+- Files changed:
+  - Source/SLIPSTORM/WaveSpawner/WaveSpawnerTypes.h (EDITED — added DECLARE_CYCLE_STAT_EXTERN for STAT_WaveSpawnerAdmissionTick + STAT_WaveSpawnerPoolAlloc)
+  - Source/SLIPSTORM/WaveSpawner/WaveSpawnerSubsystem.h (EDITED +128 lines — Story 009 private fields, 4 helper declarations, extended WITH_DEV_AUTOMATION_TESTS block with FCapturedTelemetryEvent + 7 TestOnly_ methods)
+  - Source/SLIPSTORM/WaveSpawner/WaveSpawnerSubsystem.cpp (EDITED +290 lines — DEFINE_STAT x2, Cold→Idle transition, rate-limit resets, SCOPE_CYCLE_COUNTERs, all 9 telemetry call sites, EmitTelemetry/ShouldEmitRateLimited/EmitPatternAdmitted/ValidateAndPrunePoolsAtLoad implementations)
+  - docs/architecture/adr-0011-wave-spawner-pattern-library.md (EDITED +5 lines — D3 Cold→Idle edge added)
+  - Source/SLIPSTORM/Tests/Integration/WaveSpawner/WaveSpawnerTelemetryTest.cpp (CREATED — 408 lines, 7 integration tests TC1-TC7)
+- Deviations accepted:
+  - AC-WS-24: no check(false) on pool_exhaustion_detected (Story 004 TC3 would abort; check belongs at AcquireFromPool() in Story 006)
+  - AC-WS-23: peak_min_barrage_floor_undershoot fires before TransitionTo(Flushing) (Active→Idle/Flushing→Idle are forbidden per ADR-0011 D3)
+  - AC-WS-27b Cold→Idle: Option A chosen — IsValidTransition amended + ADR D3 updated
+  - Pattern pruning: limited to accessible fields (tier, SourceLanes via ValidPeakTriplets); span/stagger deferred (private constants)
+  - TSet<FName> used for dedup (not FSoftObjectPath — no such field on FPatternDefinition)
+- Blockers: Test evidence pending compile + headless run via UBT -nullrhi
+- Next: /code-review Source/SLIPSTORM/WaveSpawner/WaveSpawnerSubsystem.h Source/SLIPSTORM/WaveSpawner/WaveSpawnerSubsystem.cpp Source/SLIPSTORM/Tests/Integration/WaveSpawner/WaveSpawnerTelemetryTest.cpp then /story-done production/epics/wave-spawner/story-009-telemetry-and-edge-case-defense.md
+
+## Session Extract — /story-done 2026-08-21
+- Verdict: COMPLETE WITH NOTES
+- Story: production/epics/wave-spawner/story-009-telemetry-and-edge-case-defense.md — Story 009: Telemetry + Edge-Case Defense + Performance Baseline
+- Tech debt logged: None (deviations documented in story completion notes)
+- Post-review fixes applied: B-1 pruning fix, W-2 COMPLEX→SIMPLE macro swap, W-3 lifecycle guard, TC3/TC4 comment label corrections
+- Next recommended: git commit for Stories 008+009, then branch reconciliation (mymerge vs main)
