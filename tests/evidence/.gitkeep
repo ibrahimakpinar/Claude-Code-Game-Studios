@@ -1,0 +1,4 @@
+# Manual test evidence goes here: screenshots, video clips, lead sign-off notes for
+# Visual/Feel and UI stories that cannot be fully covered by automated tests.
+# File naming: [date]-[story-id]-[short-description].[ext]
+# Example: 2026-07-01-EPIC-RSM-S03-tick-guard-screenshot.png

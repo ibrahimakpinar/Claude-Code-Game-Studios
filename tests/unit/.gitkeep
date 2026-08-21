@@ -1,0 +1,3 @@
+# Unit test specs go here — one subdirectory per system (e.g. tests/unit/rsm/, tests/unit/dpc/).
+# C++ test classes for UE Automation live in Source/SLIPSTORM/Tests/Unit/; this directory holds
+# the scenario specs, expected-value tables, and fixture descriptions the C++ classes implement.

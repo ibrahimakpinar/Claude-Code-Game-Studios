@@ -24,6 +24,1703 @@
 #
 # STATUS VALUES: active | deprecated | superseded-by: TR-[system]-NNN
 
+<<<<<<< HEAD
+version: 2
+last_updated: "2026-06-26"
+# 2026-06-26: /architecture-review re-validation pass — no new TRs added. ADR-0007 + ADR-0008
+# coverage closes existing TR-RSM-001..034 + TR-DPC-001..024 gaps; ADR-0002 INT-002 amendment
+# upgrades TR-PM-030 from partial to covered. ADR-0007 GDD Requirements Addressed table's
+# 5 "DPC GDD R6 Rule 3 FC-1..FC-5" rows are forward-contract designations, NOT new TR-IDs
+# (subsumed by TR-DPC-024 + ADR-0007/0008 internal alignment). Registry version unchanged.
+
+requirements:
+
+# ============================================================================
+# Input System  (design/gdd/input-system.md)
+# Prefix: TR-IS  |  System slug: input-system
+# ============================================================================
+
+  - id: TR-IS-001
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Input system maintains bounded per-contact state scoped to touch lifetime"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-002
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "System receives raw touch input from mobile screen and dispatches slip-left or slip-right events"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-003
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "System has no game-state awareness and maintains no run-state dependency except for NONE-tier visual"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-004
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Six platform interfaces injected at construction and never swapped at runtime"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-005
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Monotonic millisecond clock continues counting across app suspension for cancel-timer accuracy"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-006
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Touch-radius provider enables palm rejection without engine-source modification"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-007
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Haptic dispatch bridge enables graceful degradation across device capability tiers"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-008
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Visual dispatch bridge handles NONE-tier visual events R-3 collision and ContactResting"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-009
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Boot-flag store provides FIRST_RUN_PROMPT_ENABLED persistence across app restarts"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-010
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Zone classification divides screen into left and right halves with 8mm exclusion band"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-011
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Each touch-down event must pass new-touch check before zone classification"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-012
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Contact radius filtered against 6.0mm maximum via ITouchRadiusProvider before zone check"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-013
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Valid tap requires touch-down trigger, new touch ID, radius <= 6.0mm, position outside band"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-014
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Cancel timer duration is 180ms evaluated via IMonotonicClock in milliseconds"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-015
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Cancel timer must reset if any touch-up received before 180ms elapsed"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-016
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Resting-finger protection fires ContactResting haptic when 180ms cancel timer expires"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-017
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "ContactResting resting-flag transition suppressed during DEAD, RESOLVING, and ABORTED states"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-018
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "One-tick hold buffer delays dispatch by one drain tick for collision evaluation"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-019
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Same-frame collision discards both events on opposite zones in same or adjacent drain tick"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-020
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Collision window is frame-rate-dependent not fixed real-time, scaled with game frame rate"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-021
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Minimum supported frame rate is 30 FPS for deterministic collision behavior"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-022
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "DrainTick called once per game frame via FTSTicker for drain-tick-index contract"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-023
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "DEAD_BAND contacts discarded silently and never enter active tracking set"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-024
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Resting contacts excluded from further dispatch evaluation until lifted and re-pressed"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-025
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Input dispatch occurs regardless of run state except ABORTED-state level-detection flush"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-026
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "ABORTED state flushes entire tracking set on every DrainTick where current_state is ABORTED"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-027
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "R-3 collision haptic suppressed during DEAD, RESOLVING, ABORTED, and COUNTDOWN states"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-028
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "NONE-tier R-3 visual fires zone-edge desaturation pulse directly via IVisualDispatch"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-029
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Exclusion band width computed from 8mm and screen_dpi_per_mm in native physical pixels"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-030
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Screen physical pixel density must be verified on minimum-spec device matrix before shipping"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-031
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "drain_tick_index assigned at dequeue time, shared by all contacts in same DrainTick call"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-032
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Contact marked resting transitions to IS-internal state with no dispatch to Player Movement"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-033
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "OS_FingerIndex to contact_id mapping maintained during contact lifetime"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-034
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Stylus and indirect touch types rejected before radius filter evaluation"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-035
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "TOOL_TYPE_UNKNOWN accepted on Android for OEM compatibility despite uncertain type"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-036
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "FTouchRadiusCache slot invalidated if not updated within 2 seconds at enqueue time"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-037
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "FirstRunPrompt flag persisted via IBootFlagStore and read at COUNTDOWN entry only"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-038
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "FirstRunPrompt dismissal occurs on first successful slip during RUNNING state only"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-039
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "COUNTDOWN to RUNNING transition clears all pre-positioned contacts via IS-21-A1 tracking reset"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-040
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Contact cannot trigger new dispatch after resting flag set or b_dispatched true"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-041
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Safe_delta unsigned subtraction prevents wrap-to-small-value at uint64 boundaries"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-042
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Safe_elapsed_ms clock-stall guard returns 0 when NowMs precedes start_ms"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-043
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "All timestamps use IMonotonicClock::NowMs in milliseconds, suspension-safe"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-044
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Non-finite NowMs returns treated as clock stall, cancel-timer loop skipped for tick"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-045
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Three-touch pairwise resolution uses ascending contact_id ordering for deterministic tie-break"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-046
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Pending_removals drain cleans both tracking_set and fingerindex_to_contactid_map simultaneously"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-047
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "WCAG 2.3.1 rate-limiting owned by FWidgetVisualDispatch, not IS"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-048
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Dispatched-contact exclusion prevents re-collision after slip dispatch while held"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-049
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "Cancel timer does not reset on opposite-zone slip or collision in same contact"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-IS-050
+    system: input-system
+    gdd: design/gdd/input-system.md
+    requirement: "First-run prompt labels positioned at 78% screen height during COUNTDOWN only"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+# ============================================================================
+# Run State Machine  (design/gdd/run-state-machine.md)
+# Prefix: TR-RSM  |  System slug: run-state-machine
+# ============================================================================
+
+  - id: TR-RSM-001
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "RSM owns exclusive lifecycle authority over run state enum and canonical run timer"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-002
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Run suspension represented as orthogonal bool is_paused flag, not discrete state"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-003
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Broadcast OnStateChanged(previous_state, new_state, run_outcome, timestamp) on every state transition"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-004
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "OnStateChanged declared via DECLARE_MULTICAST_DELEGATE (non-dynamic, C++-only, no UFUNCTION)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-005
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Re-entrancy guard for OnStateChanged via runtime conditional bool bBroadcastingState"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-006
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "OnPausedChanged broadcast separately from OnStateChanged when is_paused changes"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-007
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "OnPausedChanged declared as DECLARE_MULTICAST_DELEGATE_TwoParams (non-dynamic)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-008
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Resume grace window (resume_grace flag) suppresses collision, wave spawning, movement input"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-009
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "RunTimeSource injected dependency for all wall-clock access via TUniquePtr<RunTimeSource>"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-010
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "RunTimeSource is non-UObject pure C++ abstract class, not UInterface"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-011
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "FAppTimeSource production impl uses sleep-aware iOS mach_continuous_time(), not mach_absolute_time()"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-012
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "FAppTimeSource production impl uses sleep-aware Android clock_gettime(CLOCK_BOOTTIME), not CLOCK_MONOTONIC"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-013
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "No FTimerManager usage; all timer checks use per-tick time_source.GetCurrentTime() comparisons"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-014
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Run timer monotonic countdown computed from wall clock, not UE game ticks, using double precision"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-015
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "FAppTimeSource uses #if PLATFORM_IOS / #elif PLATFORM_ANDROID branching for sleep-aware APIs"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-016
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Death takes priority over simultaneous timer expiry; RUNNING to DEAD evaluated before timer check"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-017
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Terminal event (DEAD/COMPLETE) takes priority over simultaneous app background event"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-018
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "RSM idempotent in DEAD/COMPLETE; subsequent collision/timer events in same frame are no-ops"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-019
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Bind to FCoreDelegates::ApplicationWillEnterBackgroundDelegate and ApplicationHasEnteredForegroundDelegate"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-020
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Do NOT bind to ApplicationWillDeactivateDelegate or ApplicationHasReactivatedDelegate"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-021
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "RunSeed:uint64 captured atomically at COUNTDOWN to RUNNING transition"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-022
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "RunSeed source is FPlatformTime::Cycles64() XORd with per-installation salt"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-023
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "RunSeed exposed as UPROPERTY(BlueprintReadOnly) for Wave Spawner and Death Replay consumption"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-024
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "RSM must tick before downstream systems reading remaining_time or current_state"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-025
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "TG_PrePhysics tick group with AddTickPrerequisiteActor/Component for Actor-based RSM"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-026
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Clock injection enables FakeTimeSource test path; FApp::GetCurrentTime() never used directly"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-027
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Pause accumulation formula uses max(0.0, ...) guard against backward clock movements (NTP, DST)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-028
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Remaining time formula clamped to [0, RUN_DURATION_S] via min()/max() to handle clock jumps"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-029
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Wave Spawner must flush all in-flight waves on OnPausedChanged(is_paused=false) during RUNNING"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-030
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Collision discards death_confirmed events during resume_grace window"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-031
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Player Movement freezes movement inputs during resume_grace window"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-032
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Wave Spawner holds all new spawning during resume_grace window"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-033
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "run_outcome reset to NONE on RESOLVING to IDLE (after broadcast) and ABORTED to IDLE"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-RSM-034
+    system: run-state-machine
+    gdd: design/gdd/run-state-machine.md
+    requirement: "Separate re-entrancy guard bool bBroadcastingPaused for OnPausedChanged to allow nested broadcasts"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+# ============================================================================
+# Player Movement  (decomposed 2026-06-16 → mechanics + presentation + platform)
+# Prefix: TR-PM  |  System slug: player-movement
+# ============================================================================
+
+  - id: TR-PM-001
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Implement UPlayerLaneMovementComponent on GameThread with property-read interface to RSM"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-002
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Expose current_lane and target_lane as public read-only properties returning EPlayerLane enum"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-003
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Maintain ERunSlipState with SETTLED/SLIPPING ordinals pinned at 0/1 for ABI safety"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-004
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Compute lane_world_x mapping via formula (lane_index - 2) * LANE_WIDTH_CM"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-005
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Implement F-2 TweenProgress accumulator with MAX_SLIP_DT_S cap to prevent frame-skip"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-006
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Clamp SLIP_TWEEN_DURATION_S to safe range [0.10, 0.15]s persistently at runtime"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-007
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Implement F-3 lateral_world_position via Lerp with SlipCurve and clamp curve output to [0,1]"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-008
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Implement F-5 rotation output (body/head/arm lean) via LeanCurve with staggered progress offsets"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-009
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Implement F-6 edge-absorb tail with 2-frame fade-out on SETTLED to SLIPPING Override"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-010
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Subscribe to RSM OnStateChanged and OnPausedChanged delegates via AddUObject + stored handle"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-011
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Gate slip inputs by RSM.current_state==RUNNING, is_paused==false, resume_grace==false per Rule 5"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-012
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Implement single-slot input buffer with F-4 pre-validation edge-check for off-track inputs"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-013
+    system: player-movement
+    gdd: design/gdd/player-movement-presentation.md
+    requirement: "Fire commitment-tell on SETTLED to SLIPPING with 80% white flash (2-frame hold, 50ms decay)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-014
+    system: player-movement
+    gdd: design/gdd/player-movement-presentation.md
+    requirement: "Cap commitment-tell cadence at 1 fire per 200ms for chained buffer-flush tweens"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-015
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Maintain slip_complete_count, edge_absorb_trigger_count, commitment_tell_fire_count monotonic counters"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-016
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Reset all counters and buffer on RSM COUNTDOWN entry; preserve on DEAD/COMPLETE/ABORTED"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-017
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Freeze TweenProgress, F-5 lean, F-6 state on DEAD; set movement_state=SETTLED; preserve for Death Replay"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-018
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Snap to target_lane and reset TweenProgress/lean to 0 on COMPLETE/ABORTED in same frame"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-019
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Preserve current_lane as source lane throughout SLIPPING; read by Pull-Wave Rule 11 at LANDED tick"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-020
+    system: player-movement
+    gdd: design/gdd/player-movement-platform.md
+    requirement: "Implement 60-sample rolling-window DT watchdog monitoring sustained sub-55fps (>=30 samples >18.18ms)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-021
+    system: player-movement
+    gdd: design/gdd/player-movement-platform.md
+    requirement: "Implement hysteresis-release requiring 3.0s continuous clean samples (all 60 <=16.67ms) after breach"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-022
+    system: player-movement
+    gdd: design/gdd/player-movement-platform.md
+    requirement: "Broadcast OnHardwarePerformanceBreach(bool) multicast delegate to Wave Spawner and HUD on watchdog state change"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-023
+    system: player-movement
+    gdd: design/gdd/player-movement-platform.md
+    requirement: "Enforce breach action: Wave Spawner suppresses M=3 PEAK barrage class for duration + 3.0s grace window"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-024
+    system: player-movement
+    gdd: design/gdd/player-movement-platform.md
+    requirement: "Publish is_hw_performance_degraded property as read-only to consumers (Wave Spawner, HUD, DPC)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-025
+    system: player-movement
+    gdd: design/gdd/player-movement-platform.md
+    requirement: "Initialize TickDTRollingBuffer with sentinel 0.01667f values at BeginPlay for startup clarity"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-026
+    system: player-movement
+    gdd: design/gdd/player-movement-platform.md
+    requirement: "Implement Shipping-safe guards for BLOCKING invariants: SLIP_TWEEN clamp, EMovementState default branch, curve nulls"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-027
+    system: player-movement
+    gdd: design/gdd/player-movement-platform.md
+    requirement: "Implement static_assert(MIN_ESCAPE_SLIPS==2) to catch local constant drift from registry"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-028
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Apply EC15_F6_DECAY_COEFFICIENT multiplier (default 0.7) to F-6 head/body/arm during SLIPPING phase 3"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-029
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Implement F-6 lean formula with staggered head/arm offsets (HEAD_LAG=0.10, ARM_LEAD=0.05)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-030
+    system: player-movement
+    gdd: design/gdd/player-movement-presentation.md
+    requirement: "Fire near-miss haptic EHapticEvent::NearMiss when IGameSettings::IsNearMissHapticEnabled() && TriggerNearMissBeat()"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-031
+    system: player-movement
+    gdd: design/gdd/player-movement-presentation.md
+    requirement: "Compute slip cue duration via audio_cue_ratio * SLIP_TWEEN_DURATION_S (default 0.93 * 0.15s = 139.5ms)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-032
+    system: player-movement
+    gdd: design/gdd/player-movement-presentation.md
+    requirement: "Duck slip audio by -6dB (50ms attack, 100ms release) when near-miss swell overlaps; apply HARD-CUT under buffer-drop"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-033
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Clamp final lean angles to +/-(MAX_LEAN_ANGLE_DEG * 1.2) after F-5 + F-6 summation"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-034
+    system: player-movement
+    gdd: design/gdd/player-movement-mechanics.md
+    requirement: "Verify SlipCurve/LeanCurve/EdgeAbsorbCurve at BeginPlay; log warnings for contract violations"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PM-035
+    system: player-movement
+    gdd: design/gdd/player-movement-platform.md
+    requirement: "Resolve tick-ordering: PM ticks AFTER RSM; single-tick per frame via AddTickPrerequisiteComponent"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+# ============================================================================
+# Difficulty & Phase Controller  (design/gdd/difficulty-phase-controller.md)
+# Prefix: TR-DPC  |  System slug: difficulty-phase-controller
+# ============================================================================
+
+  - id: TR-DPC-001
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "DPC is sole authority for run-phase and difficulty-parameter values during RUNNING"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-002
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "DPC reads remaining_time from RSM each tick; does not subscribe to state callbacks"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-003
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "DPC executes tick after RSM updates remaining_time via ForceTickNow semantics"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-004
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Publish inactive snapshot when RSM is not RUNNING or is_paused==true"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-005
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Compute normalized progress t_norm using (RUN_DURATION_S - remaining_time) / RUN_DURATION_S"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-006
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Map t_norm to discrete ERunPhase enum via step function (OPENER/MID/PEAK)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-007
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Phase transitions fire at first tick where t_norm crosses normalized boundary"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-008
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Evaluate three UCurveFloat scalars at t_norm with output-side finite guards"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-009
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Clamp telegraph_window_s to TELEGRAPH_WINDOW_FLOOR_S=0.70s (R10d-bound)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-010
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Clamp wave_spawn_interval_s to WAVE_SPAWN_INTERVAL_FLOOR_S=0.25s"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-011
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Clamp max_concurrent_waves to [1, 16] via float-then-int conversion"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-012
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Publish atomic FDPCFrameState struct each tick with is_active flag"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-013
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Broadcast OnPostTickFrameStatePublished multicast delegate after snapshot write"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-014
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "FDPCFrameState contains phase, three scalars, t_norm diagnostic, and is_active bool"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-015
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Guard against NaN/infinity in remaining_time at tick top before F-1 evaluation"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-016
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Validate curve assets have keys spanning [0.0, 1.0] at Initialize"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-017
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Assert threshold ordering: OPENER_END > 0.0 and PEAK_START < 1.0"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-018
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Assert MID width >= 0.10 normalized to prevent binary phase oscillation"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-019
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Check that PEAK max_concurrent_waves >= MAX_PULLS_PER_BARRAGE (3) when pool has barrages"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-020
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Tick-driven watchdog on async-load accumulates at 5.0s timeout; clamp per-tick delta"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-021
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Consumers must gate phase-diff on is_active flag per Rule 16"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-022
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Consumers must handle is_active rising-edge separately from phase-diff per Rule 16"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-023
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "TelegraphWindowCurve Path B reauthored to keys (0.0, 0.94), (0.333, 0.82), (0.75, 0.70)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-DPC-024
+    system: difficulty-phase-controller
+    gdd: design/gdd/difficulty-phase-controller.md
+    requirement: "Support RSM.ForceTickNow() idempotent entry point before reading remaining_time"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+# ============================================================================
+# Pull-Wave Behavior  (design/gdd/pull-wave-behavior.md)
+# Prefix: TR-PW  |  System slug: pull-wave-behavior
+# ============================================================================
+
+  - id: TR-PW-001
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "Lane count fixed at 5 (indices 0-4) per R1 RC-F; binding contract for PM"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-002
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "Five-state lifecycle (SPAWNED/LEANING/TRAVERSING/LANDED/DESPAWNING) with no backward transitions"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-003
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "TELEGRAPH_WINDOW_FLOOR_S = 0.70s (R10d FLOOR raise 0.65 to 0.70s 2026-06-17); locked per CD ruling"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-004
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "Curve snapshot immutable at SPAWNED entry; FPullWaveCurveSnapshot with SAMPLE_COUNT=32 locked"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-005
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "Active-wave list must be TArray<FPullWaveInstanceState> with RemoveAt (not RemoveAtSwap)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-006
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "Wave_id monotonically increasing int32; iteration order ASCENDING per Rule 14(b)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-007
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "FPullWaveInstanceState size locked at 188 bytes <=256 ceiling; satisfies cache-friendly budget"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-008
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "AC-PW-22b pattern 12: FORBID inlined UCurveFloat literals; canonical asset only via registry"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-009
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "LeanEaseCurve_Canonical pinned to RCIM_Cubic + RCTM_Auto interpolation (R10b 2026-06-16)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-010
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "Object pool sizing: pool >= 23 (16 cap + 2 DESPAWNING_RETURN_LATENCY_SLOTS + 5 margin)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-011
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "Wave-mass ISMC + Trail-cube ISMC = 2 batched draw calls at PEAK (R7 B9 separation)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-012
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "PerInstanceCustomData[0]=LeanCharge, [1]=NearMissFlash, [2]=VoxelDissolve on wave-mass ISMC"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-013
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "Trail-cube ISMC PerInstanceCustomData[0]=TrailAlpha for per-instance fade (R7 B9)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-014
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "Forward velocity frozen at SPAWNED; no mid-flight velocity updates (Rule 6, Spawn-time binding)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-015
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "TraverseElapsedS canonical time source; pause duration structurally excluded; no teleport on resume"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-016
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "Despawn pipeline ordered atomic: Collision -> Telegraph -> OnWaveDespawned -> hide -> clear -> pool-return"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-017
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "Seam 13 OnDespawnedUserCallback slot for test-stub observability of R13 ordering (R10c)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-018
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "MIN_ESCAPE_SLIPS=2 (registry constant, decoupled from MAX_PULLS=3 via triplet exclusion)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-019
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "AC-PW-PEAK-NO-ADJACENT-CLUSTER BLOCKING; 7 surviving M=3 triplets only (R7 B8 + R9 coord)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-020
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "LEAN_ANGLE_MIN_TIER_GAP_DEG=3.0; static_assert per tier pair (R7 B6 defense-in-depth)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-021
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "Tick ordering chain: RSM -> DPC -> PM -> Pull-Wave -> Telegraph -> Collision (OQ-7 ADR prerequisite)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-022
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "Mobile Forward renderer only; no Nanite/Lumen per tile-GPU architecture"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-023
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "AC-PW-22a per-tick budget ~0.25ms; 16 concurrent waves max (MAX_CONCURRENT_WAVES_CAP)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-024
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "Alpha-tested (cutout) motion trail, NOT translucent; mobile tile-GPU constraint (R1 RC-G G-3)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-025
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "NEAR_MISS_FLASH_DURATION_S=0.066s time-based (registry); 0.15s WAVE_DESPAWN_HOLD_S > 0.066s"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-026
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "F-BARRAGE-SURVIVABILITY-INVARIANT scoped to tier>=2; tier-1 PEAK barrages forbidden (R8 RC-E)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-027
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "bTeleport/SetCullDistances not used in Pull-Wave logic; trajectory deterministic via rule-based position formula"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-028
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "PM SLIP_TWEEN_DURATION_S safe range tightened [0.10, 0.15]s; binding forward contract"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-PW-029
+    system: pull-wave-behavior
+    gdd: design/gdd/pull-wave-behavior.md
+    requirement: "SPAWN_PLANE_Z_OFFSET_M default 15.0m; combined with velocity sets TRAVERSING duration"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+# ============================================================================
+# Wave Spawner & Pattern Library  (design/gdd/wave-spawner-pattern-library.md)
+# Prefix: TR-WS  |  System slug: wave-spawner-pattern-library
+# ============================================================================
+
+  - id: TR-WS-001
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Three phase-specific pattern pools (OPENER/MID/PEAK) must be pre-authored, static at runtime"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-002
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "OPENER pool contains no barrage patterns; all entries must be non-barrage only"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-003
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "MID pool contains no barrage patterns; all entries must be non-barrage only (Rule 2)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-004
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "PEAK barrage sub-pool target lanes must be exactly 7 triplets: {0,1,3},{0,1,4},{0,2,3},{0,2,4},{0,3,4},{1,2,4},{1,3,4}"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-005
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Every PEAK barrage pattern must have minimum tier >= 2; tier-1 barrages forbidden"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-006
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Barrage patterns must cluster telegraph onsets within 0.35s window (FLOOR / 2)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-007
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Non-barrage patterns must stagger consecutive onsets >= 0.70s minimum (TELEGRAPH_WINDOW_FLOOR)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-008
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Object pool must pre-allocate exactly 23 AWave instances once per session at PostLoadMapWithWorld"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-009
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Pool storage uses UPROPERTY() TArray<TObjectPtr<AWave>> to prevent garbage collection"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-010
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Spawner implements UGameInstanceSubsystem and FTickableGameObject dual inheritance"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-011
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Spawner must not tick by default; conditional tick disabled in Cold/Idle states"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-012
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Spawner reads DPC FDPCFrameState snapshot once per tick at rule 1 top; treated immutable rest of tick"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-013
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Per-run RNG seed captured from RSM RunSeed:uint64 at Cold to Active transition for determinism"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-014
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Death Replay must restore RNG seed before replaying pattern selection for Pillar 5"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-015
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Cadence gate requires (now - last_spawn_time) >= wave_spawn_interval_s for admission"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-016
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Primer pattern (first draw) admits immediately on Cold to Active; bypass cadence gate check"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-017
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Barrage admission requires 3 free slots atomically; non-barrage requires 1 free slot"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-018
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Dropped barrages set barrage_owed flag; next available 3-slot window reserved for barrage draw"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-019
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Spawner emits 9 named telemetry events with defined payload schemas (C.3 §9)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-020
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Pool pre-allocation fires exactly once per session; replay re-entry reuses existing pool"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-021
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Atomic pool swap on phase transitions (OPENER to MID, MID to PEAK) using pointer atomicity"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-022
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "In-flight waves complete under admission-time telegraph_window_s snapshot; no re-parametrization"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-023
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Phase-boundary drain window (Rule 9): no new pattern started within max_pattern_length_s of transition"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-024
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Spawner subscribes to DPC OnPostTickFrameStatePublished delegate for tick ordering pin"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-025
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Spawner reads RSM OnPausedChanged delegate to trigger pause flush (Rule 13)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-026
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Rule 12 despawn pipeline ordered: collision unregister -> telegraph unregister -> OnWaveDespawned"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-027
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Pause-flush does NOT update last_spawn_time; pre-pause value remains authoritative on resume"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-028
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "RSM resume grace honored via Rule 1 gate; spawner waits RESUME_GRACE_S after OnPausedChanged(false)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-029
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Cadence governor F-3 drives session barrage average to BARRAGE_EVENTS_PER_PEAK_TARGET_AVG = 2"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-030
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "F-3 force-draw mode activates when zero barrages and t_norm >= T_FORCE (forcing floor satisfaction)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-031
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "base_w (unweighted barrage fraction) must be in [0.15, 0.40] safe range (F-3 cook-time advisory)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-032
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "base_w < W_CEILING cross-knob invariant prevents F-3 proportional branch silent saturation"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-033
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Platform-scoped Death Replay: same architecture (ARM/x86 IEEE-754 divergence constraint)"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-034
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "F-3 uses only clamp and linear ops (no transcendentals) for platform determinism"
+    created: 2026-06-25
+    revised: ""
+    status: active
+
+  - id: TR-WS-035
+    system: wave-spawner-pattern-library
+    gdd: design/gdd/wave-spawner-pattern-library.md
+    requirement: "Future F-3 changes introducing transcendentals MUST document platform-determinism impact"
+    created: 2026-06-25
+    revised: ""
+    status: active
+=======
 version: 1
 last_updated: ""
 
@@ -54,3 +1751,4 @@ requirements: []
 #   created: 2026-03-10
 #   revised: ""
 #   status: superseded-by: TR-combat-001
+>>>>>>> myorigin/main

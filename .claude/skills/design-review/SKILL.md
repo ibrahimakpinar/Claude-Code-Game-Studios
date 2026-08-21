@@ -44,6 +44,35 @@ Evaluate against the Design Document Standard checklist:
 - [ ] Has Tuning Knobs section (configurable values identified)
 - [ ] Has Acceptance Criteria section (testable success conditions)
 
+<<<<<<< HEAD
+### Phase 2b: Seam-Doc Grep (paper-only-interface detection)
+
+**Why this step exists**: Three historical DPC reviews (R3, R5, R7 on 2026-06-04 through 2026-06-06) found the same failure class — the GDD references interfaces (`IRSMTestStub`, `FConsumerTestStub.bIsActiveRisingEdgeObserved`, `IDPCAbortDelegate`, `IWaveSpawnerPoolMetadataProvider`, `ICurveProvider`) that exist by name in the GDD's ACs but are NOT authored in `docs/architecture/platform-seam-interfaces.md`. The ACs that reference paper-only interfaces are unimplementable until the seams are written. This step catches the failure at design-review time on every GDD, not retroactively after specialist reviews surface it.
+
+**Mechanism**:
+
+1. Grep the target GDD for every UE-style interface name matching the pattern `\bI[A-Z][a-zA-Z]+\b`:
+   ```
+   rg -o '\bI[A-Z][a-zA-Z]+\b' [target-gdd-path] | sort -u
+   ```
+2. Filter out known non-seam matches (UE built-ins, common prefixes that aren't interfaces):
+   - Skip: `IModuleInterface`, `ICommand`, `IConsoleObject`, `IPropertyHandle`, `IDetailLayoutBuilder`, `IClassViewerFilter`, and similar UE engine interfaces that DPC/Wave Spawner-style GDDs do not author themselves
+   - Also skip: any identifier that appears in `docs/engine-reference/` (engine API references)
+   - Keep: project-authored interfaces (typically prefixed with `I` + a domain name like `IDPCAbortDelegate`, `IRSMTimeStateProvider`, `IWaveSpawnerPoolMetadataProvider`, `ICurveProvider`)
+3. For each remaining interface name, grep `docs/architecture/platform-seam-interfaces.md` for its definition:
+   ```
+   rg -l "class\s+[A-Za-z]*${INTERFACE_NAME}" docs/architecture/platform-seam-interfaces.md
+   ```
+4. **If any interface name has no definition match**, flag it as **BLOCKING** with source-tag `[paper-only-seam]` in Phase 4's "Required Before Implementation" section. The blocker text should follow the pattern: `[paper-only-seam] Interface NAME is referenced at GDD lines [line numbers] but is not authored in docs/architecture/platform-seam-interfaces.md. Required fix: add a Seam N entry defining the interface, production implementation, and test stub before this GDD can be marked Approved.`
+
+**Also check test stub fields**: For each `Seam N: IInterfaceName` already defined in the seam doc, grep the GDD for field names referenced on that interface's test stub (e.g., `FConsumerTestStub.bIsActiveRisingEdgeObserved`, `FRSMTestStub.AdvanceRemainingTime`). For each field, grep the seam doc's stub definition for that field name. If a referenced field is not declared on the stub, flag it as BLOCKING `[paper-only-seam-field]` — this is the same failure class as missing interfaces, but at the field-level granularity.
+
+**Skip this step in `solo` mode** (called from within another skill — assume the outer skill handles its own seam verification).
+
+**Why this lives at Phase 2 and not Phase 3b**: specialist agents in Phase 3b also find these gaps (qa-lead has historically caught them), but they find them after spending review tokens. Catching at Phase 2 is faster and cheaper, and means specialists' attention is freed for genuinely-domain-specific findings.
+
+=======
+>>>>>>> myorigin/main
 ---
 
 ## Phase 3: Consistency and Implementability

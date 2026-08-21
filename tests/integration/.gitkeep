@@ -1,0 +1,4 @@
+# Integration test specs go here — one subdirectory per cross-system seam.
+# C++ test classes for UE Automation live in Source/SLIPSTORM/Tests/Integration/; this directory
+# holds the scenario specs (which subsystems collaborate, what the seam contract is, expected
+# observable outcomes) the C++ classes implement.

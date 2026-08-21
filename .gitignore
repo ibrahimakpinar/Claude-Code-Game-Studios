@@ -11,6 +11,11 @@ Desktop.ini
 
 # === Claude Code Local ===
 .claude/settings.local.json
+<<<<<<< HEAD
+.claude/scheduled_tasks.lock
+.claude/agent-memory/
+=======
+>>>>>>> myorigin/main
 CLAUDE.local.md
 production/session-logs/
 

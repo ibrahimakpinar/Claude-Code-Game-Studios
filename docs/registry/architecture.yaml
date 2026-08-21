@@ -29,8 +29,13 @@
 #   All forbidden patterns: Grep pattern="^  - pattern:" (forbidden_patterns section)
 #   Superseded entries:     Grep pattern="status: superseded"
 
+<<<<<<< HEAD
+version: 8
+last_updated: "2026-07-03"  # v7→v8: ADR-0009 (Player Movement Component Hosting, Forward-Motion Model, Tween Implementation) authored. Two new forbidden_patterns added — (1) PlayerMovement_SetActorRotation_for_lean forbids applying body/head/arm lean via AActor::SetActorRotation on the pawn root (breaks mechanics Rule 2 collision commitment since collision geometry rotates with the root; lean MUST target the mesh component's local transform via MeshComponent->SetRelativeRotation); (2) PlayerMovement_TickComponent_without_prior_ForceTickNow forbids UPlayerLaneMovementComponent::TickComponent body executing without RSMSubsystem->ForceTickNow() as first statement after check(IsInGameThread()) — mirrors the ADR-0008 pattern for UDPCController::Tick and closes the stale-RSM-state hazard (F-2 effective_slip_tween clamp check + F-6 timer advance corrupt against stale current_state / remaining_time). ADR-0009 bundles OQ-1 (PM object type — UActorComponent) + OQ-2 (Tween implementation + Forward Motion Option (c) stationary-player). Pawn class name ASlipstormPlayerPawn is a NEW binding introduced by this ADR — no prior design/architecture doc named the pawn class. [Prior v6→v7: INT-006 amendment — ADR-0007 Initialize() salt-parse switched from FParse::HexNumber64(*SaltHex, Salt) bool+out-param call to FCString::Strtoui64(*SaltHex, nullptr, 16) value-return after UE 5.7 Misc/Parse.h primary-source verification confirmed FParse::HexNumber64 has a FStringView value-return signature in 5.7 incompatible with the original call AND incompatible with LLM-window 5.3 (const TCHAR*, TCHAR**) form; FCString::Strtoui64 chosen as cross-version-stable fallback; api: string at salt_storage_for_runseed updated FParse::HexNumber64 → FCString::Strtoui64; no new forbidden pattern added — INT-006 was a one-off LLM hallucination about an unstable API surface, not a generalizable forbidden class; closes last open surgical fix from architecture-review-2026-06-26; ADR-0007 fully unblocked for Proposed → Accepted gate.] [Prior v5→v6: INT-005 amendment — RunStateMachine_Tick_set_bHasTickedThisFrame_without_prior_guard forbidden pattern added; ADR-0007 Tick() body skeleton gains FIRST-STATEMENT bHasTickedThisFrame guard mirroring ForceTickNow() guard; Implementation Guideline 5 + Risk 4 mitigation row + Validation Criteria item + Tick body diagram + Key Interfaces flag comment rephrased "set as FIRST STATEMENT" → "guarded then set"; closes architecture-review-2026-06-26 BLOCKING Risk 4 mitigation code/prose contradiction.]
+=======
 version: 1
 last_updated: ""
+>>>>>>> myorigin/main
 
 # ─── STATE OWNERSHIP ─────────────────────────────────────────────────────────
 # Who is the authoritative owner of each piece of shared game state.
@@ -43,7 +48,90 @@ last_updated: ""
 # interface: how other systems access this state (read-only property, method call,
 #   signal, shared resource, etc.) — this is the contract other ADRs depend on.
 
+<<<<<<< HEAD
+state_ownership:
+  - state: run_current_state
+    status: active
+    owner_system: run-state-machine
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    interface: "URunStateMachineSubsystem::GetCurrentState() -> ERunState (read-only enum: IDLE | COUNTDOWN | RUNNING | DEAD | COMPLETE | RESOLVING | ABORTED). Direct accessor — consumers requiring current-frame visibility call RSM->ForceTickNow() first then GetCurrentState() (DPC GDD R6 Rule 3 pattern)."
+    write_access: run-state-machine-only  # only RSM internal transitions write; event entry points (RequestRunStart, ReportDeathConfirmed, RequestResolvingDismiss) are state-machine-gated
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+    revised: ""
+
+  - state: run_remaining_time
+    status: active
+    owner_system: run-state-machine
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    interface: "URunStateMachineSubsystem::GetRemainingTime() -> double (seconds, range [0, RUN_DURATION_S]). Implements F-1; returns cached value when bIsPaused. Direct accessor — DPC calls RSM->ForceTickNow() first to guarantee current-frame value (DPC GDD R6 Rule 3 pattern)."
+    write_access: run-state-machine-only
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+    revised: ""
+
+  - state: run_outcome
+    status: active
+    owner_system: run-state-machine
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    interface: "URunStateMachineSubsystem::GetRunOutcome() -> ERunOutcome (NONE | DEAD | COMPLETE | ABORTED). Set on RUNNING->DEAD, RUNNING->COMPLETE, COUNTDOWN/RUNNING->ABORTED; reset to NONE after RESOLVING->IDLE or ABORTED->IDLE broadcast completes (per GDD Rule 14)."
+    write_access: run-state-machine-only
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+    revised: ""
+
+  - state: run_is_paused
+    status: active
+    owner_system: run-state-machine
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    interface: "URunStateMachineSubsystem::IsPaused() -> bool. Orthogonal flag to ERunState (GDD Rule 4); true only in COUNTDOWN or RUNNING after ApplicationWillEnterBackgroundDelegate fires; cleared on ApplicationHasEnteredForegroundDelegate. State change broadcast via OnPausedChanged (DECLARE_MULTICAST_DELEGATE_TwoParams)."
+    write_access: run-state-machine-only
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+      - docs/architecture/adr-0005-wave-spawner-subsystem-hosting.md  # Wave Spawner Initialize subscribes via Wave Spawner R3a FC-2
+    added: 2026-06-25
+    revised: ""
+
+  - state: run_resume_grace
+    status: active
+    owner_system: run-state-machine
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    interface: "URunStateMachineSubsystem::IsResumeGrace() -> bool. Active only in RUNNING post-resume for RESUME_GRACE_S window (GDD Rule 19). Consumed by Collision (discards death_confirmed), Wave Spawner (holds new spawns, flushes in-flight waves), Player Movement (freezes inputs). Direct accessor — consumers requiring current-frame visibility call RSM->ForceTickNow() first then IsResumeGrace()."
+    write_access: run-state-machine-only
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+    revised: ""
+
+  - state: run_seed
+    status: active
+    owner_system: run-state-machine
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    interface: "C++: URunStateMachineSubsystem::GetRunSeed() -> uint64 (native). Blueprint: URunStateMachineSubsystem::GetRunSeedBP() -> int64 (BlueprintPure wrapper; documented brief deviation from GDD Rule 21's literal UPROPERTY form — uint64 BlueprintReadOnly is UHT-rejected on UE 5.7). Captured at COUNTDOWN->RUNNING transition as FPlatformTime::Cycles64() XOR InstallationSalt; immutable for the life of one run. Consumed by Wave Spawner (Cold->Active per Wave Spawner Rule 8) + Death Replay."
+    write_access: run-state-machine-only
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+      - docs/architecture/adr-0005-wave-spawner-subsystem-hosting.md  # Wave Spawner R3a FC-1 consumer
+    added: 2026-06-25
+    revised: ""
+
+  - state: dpc_frame_state
+    status: active
+    owner_system: difficulty-phase-controller
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    interface: "FDPCFrameState (USTRUCT BlueprintType, 6 UPROPERTY BlueprintReadOnly fields: ERunPhase current_phase, float wave_spawn_interval_s, float telegraph_window_s, int32 max_concurrent_waves, double t_norm diagnostic, bool is_active). Accessed via UDPCSubsystem::OnPostTickFrameStatePublished multicast delegate (Wave Spawner subscribes per ADR-0005 R2a-2) OR UDPCSubsystem::GetCurrentFrameState() / GetPreviousFrameState() pass-through accessors. Snapshot is atomic per tick — consumers read the full struct, NOT individual fields (DPC GDD Rule 10 binding to prevent mid-tick fragmentation across phase boundary). Previous-frame field overwritten with old current before current updates (DPC GDD Rule 11 + Rule 16 is_active diff-suppression contract)."
+    write_access: difficulty-phase-controller-only  # UDPCController writes during Tick; subsystem holds via friend-method broadcast
+    referenced_by:
+      - docs/architecture/adr-0008-dpc-subsystem-hosting.md
+      - docs/architecture/adr-0005-wave-spawner-subsystem-hosting.md  # Wave Spawner R2a-2 + R3a FC-3 consumer
+    added: 2026-06-26
+    revised: ""
+=======
 state_ownership: []
+>>>>>>> myorigin/main
 
 # Example:
 #
@@ -71,7 +159,121 @@ state_ownership: []
 #
 # pattern options: signal | direct_call | event_bus | shared_resource | rpc | none
 
+<<<<<<< HEAD
+interfaces:
+  - contract: touch_radius_access
+    status: active
+    pattern: direct_call
+    producer: FTouchRadiusBridgePlugin  # platform bridge populates FTouchRadiusCache
+    consumers:
+      - input-system  # reads via ITouchRadiusProvider at drain tick start
+    adr: docs/architecture/adr-0001-palm-rejection-rmax-calibration.md
+    signal_signature: "ITouchRadiusProvider::GetRadiusMM(FingerIndex: int32) -> float"
+    referenced_by:
+      - docs/architecture/adr-0001-palm-rejection-rmax-calibration.md
+    added: 2026-05-14
+    revised: ""
+
+  - contract: haptic_dispatch
+    status: active
+    pattern: direct_call
+    producer: FHapticPlatformPlugin  # iOS UIFeedbackGenerator + Android Vibrator JNI bridge
+    consumers:
+      - input-system   # fires R3Collision, DeadBandContact, ContactResting, InputRejected via IHapticDispatch
+      - player-movement  # fires SlipConfirmed, BufferDrop, and (opt-in per R11a-12) NearMiss via IHapticDispatch
+    adr: docs/architecture/adr-0002-haptic-platform-bridge.md
+    signal_signature: "IHapticDispatch::Fire(Event: EHapticEvent) -> void"
+    note: "EHapticEvent enum extended with NearMiss=6 on 2026-06-26 (INT-002 amendment closing PM R11a-12 forward contract). PM gates the NearMiss dispatch on IGameSettings::IsNearMissHapticEnabled() (default off) BEFORE calling Fire(); the bridge itself has no awareness of the accessibility setting. Enum extension is non-breaking — existing IS/PM call sites unaffected."
+    referenced_by:
+      - docs/architecture/adr-0002-haptic-platform-bridge.md
+    added: 2026-05-14
+    revised: "2026-06-26"
+
+  - contract: rsm_state_changed
+    status: active
+    pattern: signal  # non-dynamic multicast delegate
+    producer: run-state-machine
+    consumers:
+      - audio-controller   # music cue transitions per state
+      - player-movement    # processes input only in RUNNING + !paused + !resume_grace
+      - wave-spawner       # spawns only in RUNNING; flushes on DEAD/COMPLETE
+      - in-run-hud         # toggles visibility on state change
+      - end-run-screen     # reads run_outcome on RESOLVING entry; shows ABORTED ceremony on ABORTED->IDLE
+      - death-replay       # begins capture on RUNNING; commits on DEAD; discards on ABORTED
+      - score-persistence  # reads run_outcome during RESOLVING
+      # difficulty-phase-controller does NOT subscribe — DPC polls via ForceTickNow per DPC GDD R6 Rule 3
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    signal_signature: "FOnStateChanged(PreviousState: ERunState, NewState: ERunState, RunOutcome: ERunOutcome, Timestamp: double) — DECLARE_MULTICAST_DELEGATE_FourParams (non-dynamic, C++ only, supports AddLambda + AddUObject). Callback subscribers observe transitions on RSM's regular Tick path only (NOT on the ForceTickNow pull path — non-callback invariant); 1-frame latency for transitions that fire from inside ForceTickNow. Direct-accessor consumers see transitions immediately."
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+    revised: ""
+
+  - contract: rsm_paused_changed
+    status: active
+    pattern: signal  # non-dynamic multicast delegate
+    producer: run-state-machine
+    consumers:
+      - audio-controller   # music duck/resume on pause state changes
+      - player-movement    # immediate pause/resume reaction
+      - wave-spawner       # subscription bound in UWaveSpawnerSubsystem::Initialize per ADR-0005 line 254-258 (Wave Spawner R3a FC-2); flushes in-flight waves on is_paused=false in RUNNING
+      - collision          # discards death_confirmed events while paused or in resume_grace
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    signal_signature: "FOnPausedChanged(IsPaused: bool, Timestamp: double) — DECLARE_MULTICAST_DELEGATE_TwoParams (non-dynamic, C++ only, supports AddLambda binding from UWaveSpawnerSubsystem::Initialize)"
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+      - docs/architecture/adr-0005-wave-spawner-subsystem-hosting.md
+    added: 2026-06-25
+    revised: ""
+
+  - contract: rsm_force_tick_now
+    status: active
+    pattern: direct_call  # pull primitive; idempotent within engine frame
+    producer: difficulty-phase-controller  # DPC calls; RSM is the callee
+    consumers: []  # this is a pull surface, not a broadcast
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    signal_signature: "URunStateMachineSubsystem::ForceTickNow() -> void. Game-thread only. Idempotent within frame via bHasTickedThisFrame flag — if RSM already ticked this frame, no-op; else runs Tick body with DeltaTime = FApp::GetDeltaTime(). NON-CALLBACK INVARIANT (binding): MUST NOT broadcast OnStateChanged or OnPausedChanged during execution; state-transition visibility deferred 1 frame for callback subscribers, immediate for direct-accessor consumers. bHasTickedThisFrame reset at frame boundary via FCoreDelegates::OnEndFrame subscription (handle stored at Initialize, Removed at Deinitialize for PIE-shutdown safety)."
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+      - design/gdd/difficulty-phase-controller.md  # DPC GDD R6 Rule 3 binds this as forward contract item 1
+    added: 2026-06-25
+    revised: ""
+
+  - contract: rsm_request_abort
+    status: active
+    pattern: direct_call  # external entry; transitions RUNNING/COUNTDOWN -> ABORTED -> IDLE
+    producer: difficulty-phase-controller  # DPC EC-13 async-load watchdog calls
+    consumers: []
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    signal_signature: "URunStateMachineSubsystem::RequestAbort(Reason: EDPCAbortReason) -> void. Game-thread only. Extends GDD's PAUSED_TIMEOUT_S-exceeded ABORTED entry with an external-call path. Idempotent in terminal states (no-op in DEAD/COMPLETE/RESOLVING/IDLE/ABORTED). EDPCAbortReason enum is owned by DPC module (Public/DPC/DPCAbortReason.h per ADR-0008 Structural Decision 4); RSM forward-declares it for the entry-point surface. MUST NOT carry UFUNCTION() macro while EDPCAbortReason is forward-declared (UHT requires full type def for UFUNCTION-marked signatures)."
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+      - docs/architecture/adr-0008-dpc-subsystem-hosting.md
+      - design/gdd/difficulty-phase-controller.md  # DPC GDD R6 Rule 3 binds this as forward contract item 4
+    added: 2026-06-25
+    revised: "2026-06-26"  # ADR-0008 amends with UFUNCTION caveat
+
+  - contract: dpc_post_tick_frame_state_published
+    status: active
+    pattern: signal  # non-dynamic multicast delegate carrying value-type snapshot
+    producer: difficulty-phase-controller  # UDPCSubsystem owns delegate; UDPCController fires via friend-method
+    consumers:
+      - wave-spawner   # Wave Spawner R2a-2 + R3a FC-3: Initialize binds via AddUObject; admission decision runs inside callback
+      - pull-wave-behavior  # reads telegraph_window_s subfield for telegraph rendering
+      - in-run-hud     # reads remaining_time + phase subfield for HUD display
+      - audio-controller  # reads current_phase for phase-transition sting
+      - telegraph-system  # reads telegraph_window_s for window duration
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    signal_signature: "FOnPostTickFrameStatePublished(PublishedState: const FDPCFrameState&) — DECLARE_MULTICAST_DELEGATE_OneParam (non-dynamic, C++ only, supports AddLambda + AddUObject). Fired at end of UDPCController::Tick via UDPCSubsystem::BroadcastFrameStatePublished friend method (delegate lives on subsystem for canonical GetSubsystem<UDPCSubsystem>() discovery; controller writes snapshot fields then triggers broadcast). Fires every tick (active + inactive snapshots both publish; pre-init inactive snapshot during async-load window also publishes per DPC GDD EC-13). Re-entrancy: subscribers MUST NOT trigger DPC mutations from inside callback (DPC has no public mutators by design — RSM owns ForceTickNow per ADR-0007 — structurally precluded but documented for clarity)."
+    referenced_by:
+      - docs/architecture/adr-0008-dpc-subsystem-hosting.md
+      - docs/architecture/adr-0005-wave-spawner-subsystem-hosting.md
+      - design/gdd/difficulty-phase-controller.md
+    added: 2026-06-26
+    revised: ""
+=======
 interfaces: []
+>>>>>>> myorigin/main
 
 # Example:
 #
@@ -100,7 +302,66 @@ interfaces: []
 # Register a budget when an ADR explicitly claims a frame time allocation.
 # The registry lets /architecture-review verify the total doesn't exceed the target.
 
+<<<<<<< HEAD
+performance_budgets:
+  - system: input-system-touch-radius-cache
+    status: active
+    budget_ms: 0.01  # O(1) atomic load per contact per drain tick — negligible
+    memory_bytes: 40  # 10 slots × 4 bytes ring buffer
+    platform: Mobile
+    adr: docs/architecture/adr-0001-palm-rejection-rmax-calibration.md
+    notes: "FTouchRadiusCache lock-free ring buffer; one atomic write per finger per platform event, one atomic read per IS drain tick"
+    referenced_by:
+      - docs/architecture/adr-0001-palm-rejection-rmax-calibration.md
+    added: 2026-05-14
+    revised: ""
+
+  - system: haptic-platform-plugin
+    status: active
+    budget_ms: 0.05  # UIFeedbackGenerator / Vibrator dispatch is synchronous but brief
+    platform: Mobile
+    adr: docs/architecture/adr-0002-haptic-platform-bridge.md
+    notes: "Detection runs once at StartupModule (<5ms JNI); per-event Fire() call is immediate platform dispatch. HAPTIC_CAPABILITY cached — no detection cost per-event."
+    referenced_by:
+      - docs/architecture/adr-0002-haptic-platform-bridge.md
+    added: 2026-05-14
+    revised: ""
+
+  - system: wave-spawner-subsystem-admission-tick
+    status: active
+    budget_ms: 0.30  # AC-WS-30 p99 admission-tick ceiling on mid-tier mobile
+    platform: Mobile
+    adr: docs/architecture/adr-0005-wave-spawner-subsystem-hosting.md
+    notes: "Per-tick admission cost inside OnDPCFrameReady callback; stat scope STATGROUP_WaveSpawner; Unreal Insights gate at AC-WS-30. ADVISORY-at-story-Done, BLOCKING-at-Alpha. Pool pre-allocation cost (≤ 16.6 ms / AC-WS-31) is a one-shot session-startup cost masked behind first-world-load frame, not a per-frame budget."
+    referenced_by:
+      - docs/architecture/adr-0005-wave-spawner-subsystem-hosting.md
+    added: 2026-06-24
+    revised: ""
+
+  - system: run-state-machine-subsystem-tick
+    status: active
+    budget_ms: 0.05  # placeholder p99 — Alpha-gate Unreal Insights measurement required
+    platform: Mobile
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    notes: "Per-tick RSM Tick() cost: state-machine transition eval + double subtraction (F-1). ForceTickNow() pull primitive adds < 0.001 ms per call when already-ticked (bool read + early return). Idle (IDLE) state ticks 0 ms (IsTickable() returns false). Lifecycle delegate callback wraps in AsyncTask(GameThread) — ~16.6 ms one-shot latency per pause/resume edge, NOT a per-tick cost. Stat scope STATGROUP_RunStateMachine. PLACEHOLDER; replace with Alpha-gate measurement."
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+    revised: ""
+
+  - system: dpc-controller-tick
+    status: active
+    budget_ms: 0.20  # placeholder p99 — DPC GDD AC-22b Alpha-gate Unreal Insights measurement required
+    platform: Mobile
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    notes: "Per-tick DPC Tick() cost: RSM->ForceTickNow() no-op (~0.001 ms when already ticked) + watchdog accumulator advance + 3 UCurveFloat::GetFloatValue calls + 6 finite checks + 3 clamps + 1 FDPCFrameState write + 1 multicast broadcast (~5 subscribers, FDPCFrameState ~24 bytes pass-by-const-ref). Inactive state path ≤ 0.05 ms. Curve validation at Initialize ~0.5 ms one-shot (negligible). Stat scopes: STAT_DPCTick (per-tick body via SCOPE_CYCLE_COUNTER) + STATGROUP_DPC (FTickableGameObject registration via GetStatId). PLACEHOLDER; replace with Alpha-gate measurement per DPC GDD AC-22b."
+    referenced_by:
+      - docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    added: 2026-06-26
+    revised: ""
+=======
 performance_budgets: []
+>>>>>>> myorigin/main
 
 # Example:
 #
@@ -131,7 +392,172 @@ performance_budgets: []
 # Register an API decision when the choice is non-obvious and other ADRs might
 # make a different choice for the same purpose without knowing this was decided.
 
+<<<<<<< HEAD
+api_decisions:
+  - purpose: mobile_touch_contact_radius
+    status: active
+    api: FTouchRadiusBridgePlugin  # UE5 native plugin with ObjC (iOS) + Java (Android) bridges
+    not: UE5 Enhanced Input / FPointerEvent  # does not propagate contact radius
+    not: engine_source_modification  # banned — see forbidden_patterns
+    adr: docs/architecture/adr-0001-palm-rejection-rmax-calibration.md
+    reason: "Enhanced Input discards UITouch.majorRadius and MotionEvent.getTouchMajor(); native plugin bridge is the only path without forking engine source"
+    referenced_by:
+      - docs/architecture/adr-0001-palm-rejection-rmax-calibration.md
+    added: 2026-05-14
+    revised: ""
+
+  - purpose: mobile_haptic_dispatch
+    status: active
+    api: FHapticPlatformPlugin  # IHapticDispatch injection; iOS UIFeedbackGenerator + Android Vibrator JNI
+    not: UHapticFeedbackComponent  # gamepad force-feedback abstraction; does not exist as mobile API in UE5
+    adr: docs/architecture/adr-0002-haptic-platform-bridge.md
+    reason: "UHapticFeedbackComponent is gamepad-only in UE5; mobile haptics require native platform bridge"
+    referenced_by:
+      - docs/architecture/adr-0002-haptic-platform-bridge.md
+    added: 2026-05-14
+    revised: ""
+
+  - purpose: wave_spawner_subsystem_hosting
+    status: active
+    api: UGameInstanceSubsystem + FTickableGameObject  # UWaveSpawnerSubsystem; multiple inheritance per UE 5.7 (UGameInstanceSubsystem does not tick by default)
+    not: UWorldSubsystem  # per-replay 16.6ms pool-alloc hitch breaks core retry loop
+    not: UEngineSubsystem  # outlives GameInstance; leaks game-session-scoped state across sessions
+    not: AActor_singleton_in_PersistentLevel  # manual GC anchor, no built-in lifecycle hooks, susceptible to same per-reload hitch
+    adr: docs/architecture/adr-0005-wave-spawner-subsystem-hosting.md
+    reason: "UGameInstanceSubsystem survives world reloads — pool allocated exactly once per session at FCoreUObjectDelegates::PostLoadMapWithWorld; reused across all death-replay cycles in the session. perf-analyst R7 measured UWorldSubsystem alternative at 16.6 ms per-replay hitch."
+    referenced_by:
+      - docs/architecture/adr-0005-wave-spawner-subsystem-hosting.md
+    added: 2026-06-24
+    revised: ""
+
+  - purpose: pullwave_wave_renderer
+    status: active
+    api: UInstancedStaticMeshComponent  # plain ISMC for both WaveMassISMC (16 instances) and TrailCubeISMC (48 instances) on all mobile tiers
+    not: UHierarchicalInstancedStaticMeshComponent  # HISM cull-tree rebuild costs 0.05–0.2 ms/tick = 20–80% of AC-PW-22a 0.25 ms Pull-Wave per-tick budget with zero rendering benefit on fixed-camera no-occlusion mobile scene
+    not: per_platform_tier_conditional_renderer  # no per-tier branching (no HISM-on-tier-3, ISMC-on-tier-2); single component class on all supported tiers
+    adr: docs/architecture/adr-0006-pullwave-instanced-renderer.md
+    reason: "Fixed-camera 5m-wide mobile track has no occluders to drive HISM hierarchical culling; 16 + 48 moving instances per tick are the worst case for HISM (tree rebuild touches almost every node) and the best case for plain ISMC (flat O(N) frustum check is sub-microsecond at N=64). HISM rebuild would consume up to 80% of the AC-PW-22a per-tick budget for a tree with no work to do. perf-analyst R8 B-3 quantified the 0.05–0.2 ms/tick HISM rebuild cost; TD (ADR-0006) adjudicated accept in full."
+    referenced_by:
+      - docs/architecture/adr-0006-pullwave-instanced-renderer.md
+    added: 2026-06-24
+    revised: ""
+
+  - purpose: pullwave_renderer_component_ownership
+    status: active
+    api: APullWaveSubsystemActor_singleton  # exactly one APullWaveSubsystemActor per UWorld owns both WaveMassISMC + TrailCubeISMC + the per-wave TArray<FPullWaveRuntimeState> ActiveWaves
+    not: per_AWave_actor_render_component_ownership  # declaring WaveMassISMC/TrailCubeISMC on individual pooled AWave actors yields 32 draw calls at PEAK (16 active × 2), breaking the R1 RC-G G-2 + R7 B9 "2 batched draw calls" requirement
+    adr: docs/architecture/adr-0006-pullwave-instanced-renderer.md
+    reason: "UInstancedStaticMeshComponent batches only the instances it directly owns. Shared-singleton-host topology is load-bearing for the '2 batched draw calls at PEAK' guarantee — per-AWave-actor renderer ownership would yield 23 separate WaveMassISMC components and 23 separate TrailCubeISMC components, producing 32 draw calls at PEAK. Per-wave runtime state (FPullWaveRuntimeState) lives on the singleton alongside the renderers; the ADR-0005 23-actor AWave pool is independent of this topology (pool is a state-token budget; renderer ownership is per-world). Surfaced by architecture-review 2026-06-25 (INT-001); inscribed at ADR-0006 sub-question (f) and ADR-0005 Implementation Guideline 7 amendment 2026-06-26."
+    referenced_by:
+      - docs/architecture/adr-0006-pullwave-instanced-renderer.md
+      - docs/architecture/adr-0005-wave-spawner-subsystem-hosting.md
+    added: 2026-06-26
+    revised: ""
+
+  - purpose: run_state_machine_subsystem_hosting
+    status: active
+    api: UGameInstanceSubsystem + FTickableGameObject  # URunStateMachineSubsystem; multiple inheritance per UE 5.7 (mirror of ADR-0005 stance, applied to RSM)
+    not: UWorldSubsystem  # death-replay world reload would reconstruct RSM and break RunSeed immutability + state continuity
+    not: AActor_singleton_in_PersistentLevel  # PersistentLevel reload risk; manual GC anchor; UGameInstance::GetSubsystem<>() accessor pattern lost
+    not: AGameModeBase_or_AGameStateBase  # pinned to single world (same continuity gap as UWorldSubsystem); GameMode server-only convention blocks future networking
+    not: inline_FApp_GetCurrentTime  # untestable + frame-cached + sleep-blind (GDD EC-9 + line 64)
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    reason: "RSM must survive world reloads to preserve RunSeed immutability (GDD Rule 21; Wave Spawner AC-WS-13) + state continuity across death-replay cycle. UObject ancestry required for RunSeed Blueprint exposure (UFUNCTION wrapper). UGameInstanceSubsystem does NOT tick by default; FTickableGameObject inheritance provides per-frame tick with ETickableTickType::Conditional + IsTickable() gating for IDLE-state zero cost. Tick ordering with DPC is structural via ForceTickNow() pull primitive (DPC GDD R6 Rule 3 binding), uniform across all RSM type choices. Wave Spawner subscribes to DPC's OnPostTickFrameStatePublished per ADR-0005 R2a-2 — no direct RSM-Wave Spawner tick ordering required."
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+    revised: ""
+
+  - purpose: run_state_machine_clock_source
+    status: active
+    api: "RunTimeSource interface + FAppTimeSource production impl (delegates to Platform/SleepAwareClock.h shared with IS Seam 1: mach_continuous_time on iOS, clock_gettime(CLOCK_BOOTTIME) on Android)"
+    not: FApp_GetCurrentTime  # frame-cached; does not advance during lifecycle callbacks; 5-min pause accumulates as ~0s
+    not: FPlatformTime_Seconds_direct  # iOS mach_absolute_time + Android CLOCK_MONOTONIC both pause during device sleep
+    not: FTimerManager  # incompatible with FakeTimeSource-based unit tests (AC-15/18/23/27/29 cannot exercise FTimerManager-driven timers)
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    reason: "Sleep-aware monotonic wall clock is required (GDD EC-9; line 64). Two seams (RunTimeSource seconds-domain owned by RSM, IMonotonicClock milliseconds-domain owned by IS) share underlying platform primitives via new Source/SLIPSTORM/Public/Platform/SleepAwareClock.h header — no duplication of platform-conditional branching. RSM unit tests use FakeTimeSource (mirror of Seam 1's FFakeMonotonicClock); production constructs FAppTimeSource at Initialize() time."
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+      - docs/architecture/platform-seam-interfaces.md  # Seam 1 IMonotonicClock primitives reused via the shared header
+    added: 2026-06-25
+    revised: ""
+
+  - purpose: run_state_machine_lifecycle_delegates
+    status: active
+    api: "FCoreDelegates::ApplicationWillEnterBackgroundDelegate + ApplicationHasEnteredForegroundDelegate (both wrapped in AsyncTask(ENamedThreads::GameThread, [WeakThis] { ... }))"
+    not: ApplicationWillDeactivateDelegate_or_HasReactivatedDelegate  # fires on transient interruptions (notification banners, Control Center, incoming-call overlays) — produces false ABORTED outcomes (GDD Rule 13)
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    reason: "Run-pause semantics require full-app-background detection only — notification banners and Control Center swipes must NOT pause the run timer (60s session format design choice). Symmetric AsyncTask(GameThread) wrap on both lifecycle delegates makes the callback Android-thread-safe regardless of UE 5.7 dispatch-thread behavior; iOS dispatches on GameThread where the wrap is a zero-latency no-op."
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+    revised: ""
+
+  - purpose: run_seed_salt_storage
+    status: active
+    api: "GConfig string-encoded hex (GGameIni, section [/Script/SLIPSTORM.RunStateMachine], key RunSeedSalt, 16-char uppercase hex via FCString::Strtoui64(*SaltHex, nullptr, 16))"  # INT-006 (2026-06-26): switched from FParse::HexNumber64 after primary-source verification of UE 5.7 Misc/Parse.h showed FParse::HexNumber64 signature evolved 5.3→5.7 (now FStringView value-return) and never matched the ADR's bool+out-param usage; FCString::Strtoui64 is C-stdlib-stable across UE 5.0–5.7
+    not: GConfig_GetSetUInt64  # FConfigCacheIni does not expose GetUInt64/SetUInt64; UHT compile failure
+    not: NSUserDefaults_or_SharedPreferences  # requires platform-conditional JNI/ObjC bridging — added complexity without correctness benefit; salt is per-installation by design
+    not: UGameplayStatics_SaveGame_slot  # heavier API than needed for single uint64; designed for player progress saves
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    reason: "Per-installation salt is 8 bytes of entropy persisted across app restarts. GConfig is UE-native + platform-portable; hex-string encoding avoids the GetUInt64/SetUInt64 API gap. First-launch path generates FGuid::NewGuid() XOR-fold + immediate Flush(false, GGameIni). RunSeed = FPlatformTime::Cycles64() XOR InstallationSalt at COUNTDOWN->RUNNING (GDD Rule 21)."
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+    revised: ""
+
+  - purpose: dpc_subsystem_hosting
+    status: active
+    api: "UDPCSubsystem (UGameInstanceSubsystem wrapper) + UDPCController (UObject + FTickableGameObject) thin-wrapper pattern; subsystem holds controller via UPROPERTY TObjectPtr"
+    not: UDPCController_as_UGameInstanceSubsystem_directly  # contradicts DPC GDD R6 Rule 3 type lock; would require GDD revision
+    not: URunStateMachineSubsystem_owns_DPCController  # violates separation of concerns (RSM = Foundation, DPC = Core); god-subsystem antipattern risk
+    not: UGameInstance_subclass_owns_DPCController  # locks project into custom UGameInstance subclass; no InitializeDependency ordering mechanism
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    reason: "DPC GDD R6 Rule 3 locks the controller's type at UObject + FTickableGameObject; the subsystem wrapper preserves that type while providing canonical UGameInstance::GetSubsystem<UDPCSubsystem>() discovery (sibling pattern to ADR-0005 RSM/Wave Spawner). OnPostTickFrameStatePublished delegate lives on the subsystem (Wave Spawner's bind path is the standard subsystem pattern). Collection.InitializeDependency cascade RSM -> DPC -> Wave Spawner provides structural initialization ordering."
+    referenced_by:
+      - docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    added: 2026-06-26
+    revised: ""
+
+  - purpose: dpc_curve_validation_timing
+    status: active
+    api: "Validation at UDPCSubsystem::Initialize() — null check + Keys.Num() >= 2 + key range spans [0.0, 1.0]; failure sets bInitializationFailed=true, no controller construction, silent fallback (no broadcast)"
+    not: first_tick_validation  # validation failure happens mid-gameplay; worse player experience for QA
+    not: lazy_at_GetFloatValue  # hot-path noise; failure-timing variability across runs
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    reason: "Fail-fast at game-instance startup surfaces malformed curve assets to QA without mid-gameplay disruption. Validation cost is negligible (<0.5 ms one-shot for 3 curves). TR-DPC-016 binding; threshold validation (TR-DPC-017, TR-DPC-018, TR-DPC-019) runs alongside curve validation in the same Initialize gate."
+    referenced_by:
+      - docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    added: 2026-06-26
+    revised: ""
+
+  - purpose: dpc_watchdog_accumulator
+    status: active
+    api: "watchdog_elapsed_s += FMath::Min(DeltaTime, MAX_PER_TICK_DELTA_S = 0.1f) inside UDPCController::Tick(); timeout at 5.0s fires RSM->RequestAbort(EDPCAbortReason::AsyncLoadTimeout)"
+    not: FCoreDelegates_OnEndFrame_frame_counter  # frame-rate-dependent semantic in wall-clock domain; second consumer on OnEndFrame
+    not: RunTimeSource_GetCurrentTime_pull  # unnecessary precision; opens RSM private surface; deepens RSM-DPC coupling
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    reason: "Matches DPC GDD EC-13 prescription. Per-tick clamp prevents debugger-resume single huge frame from skipping the 5.0s timeout (clamp at 0.1s allows accurate accumulation even on a 30fps min-spec Android). FTickableGameObject DeltaTime contract delivers positive non-zero value under normal conditions; FMath::Min(0, 0.1) = 0 handles the zero-DeltaTime edge case safely. TR-DPC-020 binding."
+    referenced_by:
+      - docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    added: 2026-06-26
+    revised: ""
+
+  - purpose: dpc_abort_reason_enum_location
+    status: active
+    api: "Public/DPC/DPCAbortReason.h in DPC module (UENUM(BlueprintType) enum class EDPCAbortReason : uint8); RSM forward-declares (enum class EDPCAbortReason : uint8;) only"
+    not: shared_module_eg_SLIPSTORMCore  # premature module creation for a single enum
+    not: RSM_module_with_DPC_including_it  # contradicts DPC GDD R6 forward contract item 4 (DPC owns EDPCAbortReason)
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    reason: "DPC GDD R6 Rule 3 forward contract item 4 binds EDPCAbortReason ownership to DPC. Forward-decl in RSM keeps include graph clean (RSM Build.cs does NOT list DPC as dependency). RSM stores Reason as uint8 in .cpp — no full-definition dependency. Caveat (ADR-0008 Implementation Guideline 8): RSM's RequestAbort(EDPCAbortReason) MUST NOT carry UFUNCTION() macro while EDPCAbortReason is forward-declared; UHT requires full type def for UFUNCTION-marked signatures."
+    referenced_by:
+      - docs/architecture/adr-0008-dpc-subsystem-hosting.md
+      - docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-26
+    revised: ""
+=======
 api_decisions: []
+>>>>>>> myorigin/main
 
 # Example:
 #
@@ -157,7 +583,227 @@ api_decisions: []
 # Register a pattern when an ADR explicitly bans it AND other ADRs might
 # unknowingly use it (i.e., it's a tempting but wrong approach for this project).
 
+<<<<<<< HEAD
+forbidden_patterns:
+  - pattern: engine_source_modification_for_touch_radius
+    status: active
+    description: "Do not modify UE5 engine source to propagate touch contact radius through FPointerEvent. Use FTouchRadiusBridgePlugin (native plugin) instead."
+    why: "Forking engine source creates unsustainable maintenance burden across UE minor version updates and blocks Epic-initiated touch input changes."
+    adr: docs/architecture/adr-0001-palm-rejection-rmax-calibration.md
+    added: 2026-05-14
+
+  - pattern: UHapticFeedbackComponent_for_mobile
+    status: active
+    description: "Do not use UHapticFeedbackComponent for mobile haptic feedback. Use IHapticDispatch (FHapticPlatformPlugin) instead."
+    why: "UHapticFeedbackComponent is a gamepad force-feedback abstraction in UE5 and does not route to UIFeedbackGenerator or Android Vibrator on mobile platforms."
+    adr: docs/architecture/adr-0002-haptic-platform-bridge.md
+    added: 2026-05-14
+
+  - pattern: WaveSpawner_as_UWorldSubsystem
+    status: active
+    description: "Do not host the Wave Spawner as a UWorldSubsystem. Use UGameInstanceSubsystem + FTickableGameObject (see adr-0005)."
+    why: "UWorldSubsystem re-initializes per UWorld, re-firing the 23-actor pool pre-allocation on every death-replay; perf-analyst R7 measured this as a 16.6 ms frame hitch on the first frame of every retry, materially degrading the core retry loop."
+    adr: docs/architecture/adr-0005-wave-spawner-subsystem-hosting.md
+    added: 2026-06-24
+
+  - pattern: WaveSpawner_SpawnActor_at_Initialize
+    status: active
+    description: "Do not call SpawnActor inside UWaveSpawnerSubsystem::Initialize(). SpawnActor must be deferred to OnFirstWorldLoad() bound to FCoreUObjectDelegates::PostLoadMapWithWorld (see adr-0005)."
+    why: "In UE 5.7, UGameInstanceSubsystem::Initialize() runs before UGameInstance::LoadComplete(); GetWorld() returns null and SpawnActor asserts (R2a-4 lifecycle correction)."
+    adr: docs/architecture/adr-0005-wave-spawner-subsystem-hosting.md
+    added: 2026-06-24
+
+  - pattern: WaveSpawner_per_run_pool_reallocation
+    status: active
+    description: "Do not re-allocate the AWave pool on Wave Spawner Cold re-entry or any per-run lifecycle event. Pool must be allocated exactly once per session at first-world-load and reused unchanged across all replays in the session (see adr-0005)."
+    why: "Per-run pool reallocation defeats the UGameInstanceSubsystem hosting choice (whose entire rationale is avoiding the per-replay 16.6 ms hitch). EC-WS-8 specifies Flushing → Cold → Active replay re-entry; pool must persist across this transition."
+    adr: docs/architecture/adr-0005-wave-spawner-subsystem-hosting.md
+    added: 2026-06-24
+
+  - pattern: WaveSpawner_Initialize_without_InitializeDependency_on_RSM_and_DPC
+    status: active
+    description: "Do not retrieve UDPCSubsystem via GetSubsystem<UDPCSubsystem>() inside UWaveSpawnerSubsystem::Initialize() without first calling BOTH Collection.InitializeDependency(URunStateMachineSubsystem::StaticClass()) AND Collection.InitializeDependency(UDPCSubsystem::StaticClass()) immediately after Super::Initialize(Collection) (see adr-0005 Implementation Guideline 8)."
+    why: "Without the InitializeDependency pins, GetSubsystem<UDPCSubsystem>() may return a partially-initialized DPC instance (or null), silently dropping the OnPostTickFrameStatePublished delegate bind — production wave-spawning would fail. INT-004 amendment 2026-06-26 closes the architecture-review-2026-06-26 BLOCKING gap. Semantic-verification gate (Initialize-completion vs construction-only ordering) is ADR-0005 Engine Compatibility >> Verification Required #5 + ADR-0007 Risk 1 + ADR-0008 Verification 3 — same UE 5.7 semantic; if construction-only, Risk 5 OnInitialized one-shot delegate fallback applies."
+    adr: docs/architecture/adr-0005-wave-spawner-subsystem-hosting.md
+    added: 2026-06-26
+
+  - pattern: HISM_for_pullwave_renderers
+    status: active
+    description: "Do not use UHierarchicalInstancedStaticMeshComponent (HISM) for SLIPSTORM Pull-Wave wave-mass or trail-cube renderers on any platform tier. Use plain UInstancedStaticMeshComponent (ISMC) instead (see adr-0006)."
+    why: "HISM hierarchical cull-tree rebuild at 16 moving wave-mass instances + 48 moving trail-cube instances per tick costs 0.05–0.2 ms/tick on mobile per perf-analyst R8 B-3 — 20–80% of the AC-PW-22a 0.25 ms total Pull-Wave per-tick budget — with zero rendering benefit because the fixed-camera 5m-wide mobile track has no occluders to cull against and essentially every active instance is in the camera frustum every frame."
+    adr: docs/architecture/adr-0006-pullwave-instanced-renderer.md
+    added: 2026-06-24
+
+  - pattern: MaterialInstanceDynamic_per_pullwave_instance
+    status: active
+    description: "Do not use UMaterialInstanceDynamic (or CreateMaterialInstanceDynamic) per wave-mass instance or per trail-cube instance in Pull-Wave rendering. All per-instance scalar variation MUST route through PerInstanceCustomData on the ISMC component (see adr-0006; codifies Pull-Wave GDD R1 RC-G G-2 binding)."
+    why: "MaterialInstanceDynamic per instance forces one draw call per instance. At MAX_CONCURRENT_WAVES_CAP=16 simultaneous waves with cluster-internal voxel sub-meshes, this would explode to approximately 128–224 draw calls on mobile, far exceeding the ~100 mobile draw call budget. PerInstanceCustomData routing keeps both ISMC components at 1 batched draw call each (2 total Pull-Wave draw calls at PEAK per R7 B9)."
+    adr: docs/architecture/adr-0006-pullwave-instanced-renderer.md
+    added: 2026-06-24
+
+  - pattern: per_AWave_actor_render_component_ownership
+    status: active
+    description: "Do NOT declare TObjectPtr<UInstancedStaticMeshComponent> WaveMassISMC or TrailCubeISMC as a member of AWave or any per-wave actor class. These components MUST live on the singleton APullWaveSubsystemActor only (see adr-0006 Decision sub-question (f)). Per-wave renderer-index pairs live in FPullWaveRuntimeState on the singleton's TArray<FPullWaveRuntimeState> ActiveWaves, NOT on AWave actors. Verifiable at PR review via: rg \"TObjectPtr<UInstancedStaticMeshComponent>\\s+(WaveMassISMC|TrailCubeISMC)\" Source/Slipstorm/ — must return matches on exactly one class (APullWaveSubsystemActor) and zero other classes."
+    why: "UInstancedStaticMeshComponent batches only the instances it directly owns. Per-AWave-actor renderer ownership produces 23 separate WaveMassISMCs + 23 separate TrailCubeISMCs at PEAK = 32 draw calls (16 active × 2 components), breaking the R1 RC-G G-2 + R7 B9 'TWO batched draw calls at PEAK' requirement and the AC-PW-22a 0.25 ms per-tick budget. Shared-singleton-host topology is the only topology that yields 2 batched draw calls. Surfaced by architecture-review 2026-06-25 INT-001."
+    adr: docs/architecture/adr-0006-pullwave-instanced-renderer.md
+    added: 2026-06-26
+
+  - pattern: bTeleport_false_for_constant_velocity_pullwave_update
+    status: active
+    description: "In the Pull-Wave per-tick UpdateInstanceTransform loop for constant-velocity wave-mass and trail-cube instances on mobile forward, do NOT pass bTeleport=false. Pass bTeleport=true (see adr-0006 Key Interfaces)."
+    why: "Mobile Forward has TAA and motion blur disabled per technical-preferences.md. Passing bTeleport=false generates motion vectors that are never consumed by any post-process effect on mobile, wasting per-update CPU cost at PEAK density (16 wave-mass × 1 + 48 trail-cube × 1 = 64 UpdateInstanceTransform calls per tick). bTeleport=true suppresses motion-vector generation with no visual penalty on mobile. Engine specialist Risk 2 (ADR-0006); Verification 9 confirms safety under QueryOnly overlap."
+    adr: docs/architecture/adr-0006-pullwave-instanced-renderer.md
+    added: 2026-06-24
+
+  - pattern: RunStateMachine_SpawnActor_at_Initialize
+    status: active
+    description: "Do not call SpawnActor inside URunStateMachineSubsystem::Initialize(). Mirror of ADR-0005's Wave Spawner constraint applied to RSM (see adr-0007)."
+    why: "In UE 5.7, UGameInstanceSubsystem::Initialize() runs before UGameInstance::LoadComplete(); GetWorld() returns null and SpawnActor asserts. RSM has no entity references per GDD Rule 12; pattern is registered defensively against future regression."
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+
+  - pattern: RunStateMachine_FApp_GetCurrentTime_usage
+    status: active
+    description: "Do not call FApp::GetCurrentTime() from RSM source. Use TimeSource->GetCurrentTime() via injected RunTimeSource (see adr-0007)."
+    why: "FApp::GetCurrentTime() is frame-cached (set once per GameThread tick) and does not advance during lifecycle callbacks. Using it in F-3 silently corrupts the run timer across pauses — a 5-minute background pause accumulates as ~0s of pause-duration, producing premature COMPLETE (GDD line 64 + EC-9 explicit warning)."
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+
+  - pattern: RunStateMachine_FPlatformTime_Seconds_direct
+    status: active
+    description: "Do not call FPlatformTime::Seconds() directly from RSM source. Use TimeSource->GetCurrentTime() via injected RunTimeSource, whose production FAppTimeSource impl delegates to mach_continuous_time() (iOS) / clock_gettime(CLOCK_BOOTTIME) (Android) via the shared Platform/SleepAwareClock.h header (see adr-0007)."
+    why: "FPlatformTime::Seconds() is not sleep-aware on either mobile platform (iOS mach_absolute_time + Android CLOCK_MONOTONIC both pause during device sleep). A run paused with the device asleep silently undercounts total_paused_duration and corrupts F-1 (GDD EC-9)."
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+
+  - pattern: RunStateMachine_FTimerManager_usage
+    status: active
+    description: "Do not use FTimerManager for any RSM timer (snap durations, RESOLVING thresholds, resume_grace expiry, COUNTDOWN elapsed). All timer evaluations use per-tick TimeSource->GetCurrentTime() comparisons (see adr-0007 Implementation Guideline 7)."
+    why: "FTimerManager is incompatible with FakeTimeSource-based unit tests; advancing the fake clock must be sufficient to trigger all timer-dependent transitions. AC-15, AC-18, AC-23, AC-27, AC-29 cannot exercise FTimerManager-driven timers (GDD Clock Injection Timer Implementation Policy)."
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+
+  - pattern: RunStateMachine_ApplicationWillDeactivateDelegate_usage
+    status: active
+    description: "Do not bind RSM to FCoreDelegates::ApplicationWillDeactivateDelegate or ApplicationHasReactivatedDelegate. Use ApplicationWillEnterBackgroundDelegate + ApplicationHasEnteredForegroundDelegate (see adr-0007 Structural Decision 5)."
+    why: "ApplicationWillDeactivateDelegate fires on transient interruptions including notification banners, Control Center swipes, and incoming-call overlays. Using it for run-pause semantics produces false ABORTED outcomes for routine mobile interruptions that the player does NOT perceive as backgrounding the game (GDD Rule 13). The 60-second session format accepts that brief overlay interruptions DO NOT pause the run."
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+
+  - pattern: RunStateMachine_check_or_ensure_for_reentrancy
+    status: active
+    description: "Do not use check() or ensure() (or check macros gated by DO_CHECK) for OnStateChanged / OnPausedChanged re-entrancy guards. Use runtime conditional + UE_LOG(Error) pattern (see adr-0007 Implementation Guideline 6)."
+    why: "check() and ensure() are gated by DO_CHECK, which is 0 in Shipping builds by default (unless bUseChecksInShippingBuilds = true in Target.cs), making them no-ops in production. A re-entrancy guard that compiles to a no-op in Shipping silently corrupts subscriber broadcast payloads (GDD Rule 15 + 18)."
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+
+  - pattern: RunStateMachine_DECLARE_DYNAMIC_MULTICAST_for_state_or_paused
+    status: active
+    description: "Do not declare OnStateChanged or OnPausedChanged via DECLARE_DYNAMIC_MULTICAST_DELEGATE_*. Use the non-dynamic DECLARE_MULTICAST_DELEGATE_* variants (see adr-0007 Key Interfaces)."
+    why: "Dynamic multicast requires UFUNCTION-marked handlers + reflection overhead + cannot bind lambdas. Wave Spawner R2a-2 + R3a FC-2 bind RSM->OnPausedChanged via AddLambda inside UWaveSpawnerSubsystem::Initialize() — dynamic delegates would reject this. If future Blueprint exposure is needed (designer-side debugging), author a parallel dynamic delegate (e.g. OnPausedChangedBP) rather than retrofitting the canonical one (GDD Rule 15 + 18)."
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-25
+
+  - pattern: RunStateMachine_Tick_set_bHasTickedThisFrame_without_prior_guard
+    status: active
+    description: "URunStateMachineSubsystem::Tick() MUST guard on bHasTickedThisFrame with early-return AS FIRST STATEMENT (after any thread check), then set bHasTickedThisFrame = true AS SECOND STATEMENT — before any body logic. Mirror of the existing ForceTickNow() guard-then-call-Tick pattern (see adr-0007 Implementation Guideline 5; Tick body skeleton lines 418–435 post-INT-005 amendment 2026-06-26)."
+    why: "Without the guard, ForceTickNow() running first this frame would set the flag + execute the body, then the engine's later regular Tick() call would re-execute the body — double-advancing remaining_time + double-firing Rule 17 priority (death_confirmed). Risk 4 mitigation row explicitly promises this short-circuit behavior; the pre-INT-005 code at Tick() lines 418–425 set the flag but did not guard, contradicting the promise. Symmetric reverse case (engine ticks first, ForceTickNow short-circuits) is already covered by ForceTickNow()'s existing guard at lines 431–434 — this pattern enforces the symmetric guard at the engine-entry path."
+    adr: docs/architecture/adr-0007-run-state-machine-hosting.md
+    added: 2026-06-26
+
+  - pattern: DPC_Controller_as_Subsystem_directly
+    status: active
+    description: "Do not make UDPCController itself a UGameInstanceSubsystem (skipping the UDPCSubsystem wrapper). The wrapper pattern is mandatory (see adr-0008 Structural Decision 1)."
+    why: "DPC GDD R6 Rule 3 locks the controller's type at UObject + FTickableGameObject. Adopting a subsystem-only DPC would require a GDD revision via /propagate-design-change. The thin-wrapper pattern preserves GDD authority while providing canonical subsystem discovery."
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    added: 2026-06-26
+
+  - pattern: DPC_Subsystem_inherits_FTickableGameObject
+    status: active
+    description: "Do not have UDPCSubsystem inherit FTickableGameObject. The tick interface belongs ONLY to UDPCController (see adr-0008 Key Interfaces)."
+    why: "If both the subsystem AND the controller implement FTickableGameObject, DPC ticks twice per frame. Engine Compatibility Verification 2 explicitly checks this. The subsystem is a static wrapper; only the controller ticks."
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    added: 2026-06-26
+
+  - pattern: DPC_Tick_admission_logic_outside_Tick_body
+    status: active
+    description: "All DPC admission/active-publication logic MUST live inside UDPCController::Tick() body. Do not move active-state logic into Initialize-driven event handlers, async tasks, or external callbacks (see adr-0008 Implementation Guideline 4)."
+    why: "DPC GDD Rule 3 + Rule 14 bind the tick body order (SCOPE_CYCLE_COUNTER -> thread check -> ForceTickNow -> watchdog -> active gate -> curves -> snapshot -> broadcast). Moving logic out of Tick breaks the structural ordering guarantee with RSM."
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    added: 2026-06-26
+
+  - pattern: DPC_FApp_GetCurrentTime_usage
+    status: active
+    description: "Do not call FApp::GetCurrentTime() from DPC source. Use Tick()'s DeltaTime parameter for the watchdog accumulator (see adr-0008 Structural Decision 3)."
+    why: "FApp::GetCurrentTime() is frame-cached and does not advance during lifecycle callbacks. Same prohibition as RSM (mirror of adr-0007 forbidden pattern). DPC's watchdog requires Tick-aligned DeltaTime per DPC GDD EC-13."
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    added: 2026-06-26
+
+  - pattern: DPC_FTimerManager_usage
+    status: active
+    description: "Do not use FTimerManager for any DPC timer (watchdog, phase transition, snapshot publication). All timing uses Tick()'s DeltaTime parameter or RSM accessors."
+    why: "Same prohibition as RSM. DPC's watchdog timeout is computed inline in Tick. FTimerManager is incompatible with FakeTimeSource-based unit tests."
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    added: 2026-06-26
+
+  - pattern: DPC_curve_evaluation_without_finite_guards
+    status: active
+    description: "Do not evaluate UCurveFloat::GetFloatValue() returns without applying output-side finite guards via FMath::IsFinite (see adr-0008 Implementation Guideline 4 + DPC GDD Rule 8)."
+    why: "FMath::Max(0.25f, NaN) returns NaN (NaN comparisons evaluate false in </>); FMath::FloorToInt32(NaN) is undefined behavior (implementation-defined on ARM, commonly produces INT_MIN). Without the guard, malformed curves silently corrupt FDPCFrameState."
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    added: 2026-06-26
+
+  - pattern: DPC_t_norm_input_without_clamp
+    status: active
+    description: "Do not pass t_norm to UCurveFloat::GetFloatValue() without first clamping via FMath::Clamp(t_norm, 0.0, 1.0) (see adr-0008 Implementation Guideline 4 + DPC GDD Rule 14)."
+    why: "Non-finite or out-of-range t_norm input produces undefined curve output. The input-side clamp is the first guard; the output-side finite guard is the second. Both are required per DPC GDD Rule 8 + Rule 14."
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    added: 2026-06-26
+
+  - pattern: DPC_BroadcastFrameStatePublished_from_outside_controller
+    status: active
+    description: "Only UDPCController::Tick() may call UDPCSubsystem::BroadcastFrameStatePublished(). External callers (other subsystems, Blueprint, reflection workarounds) MUST NOT fire the broadcast directly (see adr-0008 Structural Decision 1)."
+    why: "The friend declaration on UDPCSubsystem enforces this at compile time. Firing the broadcast from outside the controller decouples it from the snapshot write, producing inconsistent state visible to Wave Spawner / Pull-Wave."
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    added: 2026-06-26
+
+  - pattern: EDPCAbortReason_definition_in_RSM_module
+    status: active
+    description: "EDPCAbortReason MUST be defined in Public/DPC/DPCAbortReason.h inside the DPC module. RSM only forward-declares it. Do not move the definition to RSM module (see adr-0008 Structural Decision 4)."
+    why: "DPC GDD R6 forward contract item 4 binds EDPCAbortReason ownership to DPC. Definition in RSM is an ownership inversion. Also: RequestAbort(EDPCAbortReason) MUST remain plain C++ (not UFUNCTION) while EDPCAbortReason is forward-declared."
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    added: 2026-06-26
+
+  - pattern: DPC_curve_validation_at_first_tick_or_lazy
+    status: active
+    description: "UCurveFloat asset validation MUST run at UDPCSubsystem::Initialize() — not at first Tick, not lazily at first GetFloatValue (see adr-0008 Structural Decision 2)."
+    why: "Validation failure mid-gameplay is a worse failure mode for QA than fail-fast at startup. Lazy hot-path validation adds noise. TR-DPC-016 binding closed at Initialize-time validation."
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    added: 2026-06-26
+
+  - pattern: DPC_watchdog_accumulator_unclamped
+    status: active
+    description: "UDPCController watchdog accumulator MUST clamp DeltaTime via FMath::Min(DeltaTime, MAX_PER_TICK_DELTA_S = 0.1f) per tick. Do not accumulate raw DeltaTime (see adr-0008 Structural Decision 3)."
+    why: "A debugger-resume single huge DeltaTime (e.g., 10.0s) would advance watchdog past the 5.0s timeout in one tick, skipping the intended Bound-and-Abort window. The 0.1s clamp ensures at least 50 ticks are required to reach timeout."
+    adr: docs/architecture/adr-0008-dpc-subsystem-hosting.md
+    added: 2026-06-26
+
+  - pattern: PlayerMovement_SetActorRotation_for_lean
+    status: active
+    description: "UPlayerLaneMovementComponent MUST NOT call AActor::SetActorRotation (or any variant that rotates the pawn root) to apply body/head/arm lean. Lean is applied to the MESH component's local transform via MeshComponent->SetRelativeRotation(...). Root remains at identity rotation. See ADR-0009 Structural Decision 5 + Implementation Guideline 6."
+    why: "Rotating the pawn root rotates the collision geometry with it — the committed lane X (a world-space X coordinate set via SetActorLocation on SETTLED→SLIPPING) would rotate out of the target lane's world position on the next tick, breaking mechanics Rule 2 collision commitment. Collision geometry MUST stay aligned to the track-X axis; only the visual mesh rotates for lean. Mechanics §3 Cross-Component Interfaces → Rotation Implementation is explicit on this: 'Use SetRelativeRotation on the skeletal/voxel mesh component (or lean socket). Do NOT use SetActorRotation for lean — it rotates the root actor, which moves the collision capsule with it and breaks the collision-commitment contract.'"
+    adr: docs/architecture/adr-0009-player-movement-hosting.md
+    added: 2026-07-03
+
+  - pattern: PlayerMovement_TickComponent_without_prior_ForceTickNow
+    status: active
+    description: "UPlayerLaneMovementComponent::TickComponent body MUST call RSMSubsystem->ForceTickNow() as its first statement after check(IsInGameThread()). Do not delay the call, do not gate it on movement_state, do not skip it under any RSM state. Mirrors the ADR-0008 pattern for UDPCController::Tick (which places RSM->ForceTickNow() as its first non-instrumentation statement). See ADR-0009 Structural Decision 4 + Implementation Guideline 1."
+    why: "Without the ForceTickNow prologue, PM reads stale RSM.current_state / RSM.remaining_time — up to one frame stale under unfavorable engine tick scheduling (UE 5.7 does not guarantee an ordering between UActorComponent::TickComponent on the player pawn and URunStateMachineSubsystem::Tick as an FTickableGameObject on a UGameInstanceSubsystem — AddTickPrerequisiteComponent is not available for subsystem targets per platform §3 Tick Ordering). F-2's effective_slip_tween clamp check + F-6 timer advance both silently corrupt against stale RSM state. RSM's bHasTickedThisFrame guard (INT-005-amended 2026-06-26) makes ForceTickNow idempotent within-frame — the call is safe even if DPC or engine already ticked RSM this frame; PM's call short-circuits under the idempotence guard. The canonical (c) pull-primitive pattern supersedes platform §3 lines 57–64 pre-ADR-0007 options (a) one-frame-lag + (b) manual TickComponent from RSM."
+    adr: docs/architecture/adr-0009-player-movement-hosting.md
+    added: 2026-07-03
+=======
 forbidden_patterns: []
+>>>>>>> myorigin/main
 
 # Example:
 #

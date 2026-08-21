@@ -37,7 +37,11 @@
 #   Each entry: name, status, source, referenced_by[], attributes{}, added, revised
 
 version: 1
+<<<<<<< HEAD
+last_updated: "2026-06-23"  # /propagate-design-change pass (2026-06-23) — Wave Spawner R3a closure: added `design/gdd/wave-spawner-pattern-library.md` to `referenced_by` lists of 4 registry constants Wave Spawner is now a direct consumer of (BARRAGE_SIMULTANEITY_WINDOW_S per qa-lead R3 finding; TELEGRAPH_WINDOW_FLOOR_S per Rule 6 + Rule 15 NON_BARRAGE_STAGGER + F-6/F-7/F-8; TELEGRAPH_WINDOW_FLOOR_MAX_ADMISSIBLE_S per Rule 15 + F-7 + AC-WS-21; MAX_CONCURRENT_WAVES_CAP per F-2 + AC-WS-09 + G.2). No registry value changes; only `referenced_by` consumer-list updates. Pull-Wave + DPC R14-closed cascade unaffected. /propagate-design-change pass (2026-06-19) — R13/R14 closure cascade: BARRAGE_SIMULTANEITY_WINDOW_S value flipped 0.3 → 0.35s (restores FLOOR/2 design ratio at FLOOR=0.70s; R11a-arithmetic hold-condition "DPC R-Updated re-review confirmation" satisfied by R14 APPROVED 2026-06-19; cross-system survivability invariant unaffected — W is simultaneity window, not escape budget); NEW constant TELEGRAPH_WINDOW_FLOOR_MAX_ADMISSIBLE_S = 0.76s codified as derived ceiling under Constraint A (OPENER_key ≤ 1.0s ⇒ FLOOR ≤ 0.76s under Path B); both DPC line 944 + Pull-Wave line 535 oracle sites updated lock-step per ADR-0004 dual-grep methodology; DPC line 717 "FLAGGED FOR CD POST-PASS REVIEW" prose retired (CD R12 Ruling 1 ratified Path B). R11a-arithmetic cross-doc propagation pass (2026-06-18) — TELEGRAPH_WINDOW_FLOOR_S raised 0.65 → 0.70s per Pull-Wave R10d CD PATH (i) ruling (2026-06-17); BARRAGE_SIMULTANEITY_WINDOW_S derivation target updated 0.325 → 0.35s. Both entries' notes restructured to retire R9-coordination "FLOOR stays at 0.65s" framing; R10d resolution now canonical. Pull-Wave R10b measurement sub-pass (2026-06-16) — LeanEaseCurve_Canonical interpolation_mode (RCIM_Cubic) + tangent_mode (RCTM_Auto) pinned per R9 systems-designer F1; was implicit in fingerprint targets at t=0.25→0.038, now binding metadata; cook-time fingerprint check extended with interpolation-metadata verification (check #2). R7 (2026-06-10), R6 B3 (2026-06-08), and earlier R4 RC-R3 entries preserved below. // R7 in-session revision pass (cluster-based, 13 BLOCKING + 1 contingent across 5 root-cause classes): R7 B6 LEAN_ANGLE_MIN_TIER_GAP_DEG=3.0 added + TIER3 upper tightened 27→25 + TIER4 lower tightened 25→28; R7 B7 LeanEaseCurve_Canonical registry-canonical asset reference added; R7 B6/B7 AC-PW-22b sub-patterns 7e-7h + 12 added. R6 B3 LEAN_BRIGHTNESS_PEAK_RATIO safe range tightened [1.5, 2.2] → [1.7, 2.2] preserved.
+=======
 last_updated: ""
+>>>>>>> myorigin/main
 
 # ─── ENTITIES ────────────────────────────────────────────────────────────────
 # Named game-world objects: enemies, NPCs, characters, factions, bosses.
@@ -139,7 +143,852 @@ formulas: []
 #
 # Required fields: name, status, source, referenced_by, value, unit, added
 
+<<<<<<< HEAD
+constants:
+  - name: TELEGRAPH_WINDOW_FLOOR_S
+    status: provisional
+    source: design/gdd/difficulty-phase-controller.md
+    referenced_by:
+      - design/gdd/difficulty-phase-controller.md
+      - design/gdd/pull-wave-behavior.md
+      - design/gdd/wave-spawner-pattern-library.md  # added 2026-06-23 per Wave Spawner R3a /propagate-design-change closure; Wave Spawner Rule 6 + Rule 15 NON_BARRAGE_STAGGER cook check + F-6 stagger floor + F-7 FLOOR/W ratio + F-8 inheritance + AC-WS-07 + AC-WS-21 all consume this constant
+      - design/gdd/player-movement-mechanics.md  # Step 8a routing 2026-07-02 (semantic-verify pass) — mechanics §3 Cross-System Interface Table (Pull-Wave row) + F-BARRAGE-SURVIVABILITY-INVARIANT description at §4 reference this constant; platform §4 F-BARRAGE-SURVIVABILITY-INVARIANT-CORNERS is the frame-quantized derivation site
+      - design/gdd/player-movement-platform.md  # Step 8a routing 2026-07-02 — TELEGRAPH_WINDOW_FLOOR_S is consumed by PM Hardware Contract (F-BARRAGE-SURVIVABILITY-INVARIANT-CORNERS derivation matrix); Hardware Contract lives in platform sub-GDD per PM decomposition mini-map
+    value: 0.70
+    unit: seconds
+    notes: >
+      Pillar 2 contractual minimum ("World telegraphs before it strikes —
+      validated on 6-inch screen"). Clamped in DPC code (not in curve
+      configuration); downstream Telegraph System must not impose its own
+      contradicting floor. Numeric value is design-time bound at 0.70s
+      under R10d CD ruling (see below); the PROVISIONAL marker is retained
+      for the empirical-confirmation phase (two-phase gate: ADVISORY at
+      story-Done via static arithmetic; BLOCKING at Alpha via
+      AC-PILLAR-2-CONCURRENT prototype playtest).
+
+      2026-06-17 (Pull-Wave R10d cross-system resolution — CD PATH (i)
+      ruling) — value raised 0.65s → 0.70s via creative-director PATH (i)
+      trade-off ruling to close Pull-Wave F-BARRAGE-SURVIVABILITY-INVARIANT
+      line 546 self-admission under the direction-detection perceptibility
+      model. At new FLOOR=0.70s the invariant closes across the full REACT
+      safe range [0.20, 0.25]s: 0.15 + 0.20 + 0.30 = 0.65 ≤ 0.70s ✓ 50ms
+      margin at default; 0.15 + 0.25 + 0.30 = 0.70 ≤ 0.70s ✓ zero margin at
+      ceiling under direction-detection (~1°) perceptibility-onset model.
+      Player-facing cost ≈ 7.7% slower telegraphs at PEAK floor boundary —
+      sub-perceptible single-feature change. The R9 Option (c) Wave Spawner
+      cook-time consecutive-triplet exclusion + MIN_ESCAPE_SLIPS=2 REMAINS
+      BINDING (locomotion-only invariant `0.15×2 + 0.25 = 0.55 ≤ 0.70` ✓
+      150ms margin). R10d adds a perceptibility-onset safety net atop
+      Option (c); both mechanisms together provide structural margin. See
+      `design/gdd/reviews/pull-wave-behavior-review-log.md` R10d entry and
+      `design/gdd/reviews/cross-system-survivability-coordination-2026-06-11.md`
+      R10d resolution append (2026-06-18).
+
+      2026-06-11 (PM R9 cross-system coordination resolution) — PM R9
+      fresh-context re-review surfaced zero-margin F-BARRAGE-SURVIVABILITY-
+      INVARIANT cliff (single transient frame hitch at 60fps kills player on
+      M=3 PEAK barrage; Pillar 5 violation). Cross-system coordination bound
+      Option (c): Wave Spawner cook-time consecutive-triplet exclusion
+      (Pull-Wave R7 B8 ADVISORY → BLOCKING; MIN_ESCAPE_SLIPS reduced from 3
+      to 2). At that time TELEGRAPH_WINDOW_FLOOR_S was preserved at 0.65s —
+      Options (a) tighten-SLIP_TWEEN and (b) raise-FLOOR were both rejected
+      at R9 because they relocated rather than eliminated the cliff at
+      REACTION_BUDGET = 0.25s. R10d (2026-06-17) revisits the FLOOR raise
+      under the binding direction-detection (1°) perceptibility-onset model
+      that R9 did not yet have evidence for; under that model the raise to
+      0.70s is the cleanest cross-system closure (smallest blast radius,
+      preserves PM SLIP_TWEEN tuning and back-loaded ease curve). (Prior
+      R8 in-session pass had speculatively raised this constant to 0.68
+      marked "Path b chosen" — that adjudication was overturned by R9
+      fresh-context re-review; the 0.68 entry was registry drift. R10d
+      supersedes the R9 hold at 0.65s with a new CD-ruled value of 0.70s
+      via a different mechanism than R9-era Option (b).)
+
+      R2 Cluster E (2026-06-08) path (b) resolution had raised value from 0.6
+      → 0.65s — historical context preserved. The 2026-06-11 R9 coordination
+      held at 0.65s. The 2026-06-17 R10d CD ruling raised to 0.70s.
+
+      DPC GDD Rule 9 PROVISIONAL framing retired under R10d: the FLOOR is
+      now design-time bound at 0.70s; AC-PILLAR-2-CONCURRENT validates the
+      new value at the prototype milestone as a confidence check, NOT as a
+      closure-gate (two-phase gate per Pull-Wave R10b pattern: ADVISORY at
+      story-Done via static arithmetic verification; BLOCKING at Alpha via
+      empirical playtest closure). If AC-PILLAR-2-CONCURRENT fails at Alpha
+      empirical, the FLOOR adjustment path requires CD ruling per the R10d
+      precedent — not the automatic "raise to 0.7-0.9s" the original Rule 9
+      prescribed. Downstream GDDs MUST cite 0.70s with the R10d resolution
+      annotation when inheriting the floor; the PROVISIONAL marker now
+      applies only to the empirical-confirmation phase.
+    added: 2026-06-04
+    revised: "2026-06-18"
+
+  - name: TELEGRAPH_WINDOW_FLOOR_MAX_ADMISSIBLE_S
+    status: derived
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+      - design/gdd/wave-spawner-pattern-library.md  # added 2026-06-23 per Wave Spawner R3a /propagate-design-change closure; Wave Spawner Rule 15 anchor + F-7 PATH (i) FLOOR-raise ceiling + AC-WS-21 ceiling immutability all consume this constant
+    value: 0.76
+    unit: seconds
+    notes: >
+      Derived ceiling on the maximum admissible value of TELEGRAPH_WINDOW_FLOOR_S
+      under any future CD PATH (i) raise. NOT a primary tunable — codified for
+      tooling / test-harness discoverability and to prevent indefinite FLOOR
+      raises.
+
+      Derivation (Pull-Wave R12 systems-designer, 2026-06-18; codified per
+      /propagate-design-change 2026-06-19): Constraint A binds OPENER_key under
+      Path B at FLOOR + 0.24s ≤ 1.0s (where 1.0s is the practical "generous-but-
+      not-lethargic" perceptibility ceiling for telegraph windows). Solving:
+      FLOOR ≤ 0.76s. Constraint B (FLOOR < 1.0s, PEAK spawn-interval floor) is
+      non-binding under Constraint A.
+
+      Current FLOOR=0.70s has 60ms headroom under this ceiling before Constraint
+      A is breached. The PATH (i) iteration cap = 1 raise (CD R12 Ruling 3,
+      inscribed Pull-Wave line 941) prevents indefinite FLOOR raises regardless
+      of available headroom; a second PROTO-GATE confidence-check failure forces
+      escalation to PATH (ii) or PATH (iii).
+
+      This constant is consulted by:
+      (a) Pull-Wave PROTO-GATE escalation pre-authorization (line 941) — PATH
+          (i) raise must not exceed this ceiling.
+      (b) Future CD adjudication of FLOOR raises — any proposed FLOOR > 0.76s
+          requires Path B reauthoring of TelegraphWindowCurve at minimum
+          (current Path B keys 0.94/0.82/0.70 would no longer be admissible).
+      (c) Tooling — registry-driven validation can flag any GDD or test fixture
+          asserting FLOOR > 0.76s as out-of-band.
+
+      Status: derived (not primary tunable; computed from Constraint A + Path B
+      OPENER offset). NOT subject to FLOOR/2 design ratio (that's
+      BARRAGE_SIMULTANEITY_WINDOW_S's derivation).
+    added: "2026-06-19"
+    revised: ""
+
+  - name: MAX_PULLS_PER_BARRAGE
+    status: provisional
+    source: design/gdd/difficulty-phase-controller.md
+    referenced_by:
+      - design/gdd/difficulty-phase-controller.md
+      - design/gdd/pull-wave-behavior.md
+    value: 3
+    unit: pulls (count)
+    notes: >
+      Maximum number of telegraph onset events within a single barrage pattern
+      (patterns flagged is_barrage=true in the PEAK pool). Equals max_concurrent_waves
+      PEAK target (R3-locked = 3) — a barrage exhausts the PEAK concurrency cap exactly.
+      Value is PROVISIONAL pending DPC AC-PILLAR-2-BARRAGE close at the prototype
+      milestone. Resolution paths: Path A (pass) locks M=3; Path C (systemic fail)
+      revises M downward (e.g., 2) with CD sign-off and re-binding of Player Fantasy +
+      Phase Identity. Cluster B's max_concurrent_waves enforcement semantic must not
+      skip-and-drop pulls within a single barrage pattern — if skip-and-drop is chosen,
+      AC-PILLAR-2-BARRAGE will fail and M must be revisited before Alpha.
+      Sourced from DPC GDD Phase Identity + Pillar Alignment Under Option B sections.
+    added: 2026-06-05
+    revised: ""
+
+  - name: BARRAGE_SIMULTANEITY_WINDOW_S
+    status: provisional
+    source: design/gdd/difficulty-phase-controller.md
+    referenced_by:
+      - design/gdd/difficulty-phase-controller.md
+      - design/gdd/pull-wave-behavior.md
+      - design/gdd/wave-spawner-pattern-library.md  # added 2026-06-23 per Wave Spawner R3a /propagate-design-change closure (qa-lead R3 cross-system verification finding); Wave Spawner Rule 6 + Rule 15 BARRAGE_W_SPAN cook check + F-5 simultaneity span check + F-7 FLOOR/W ratio contract all consume this constant
+    value: 0.35
+    unit: seconds
+    notes: >
+      Maximum time span within which up to MAX_PULLS_PER_BARRAGE telegraph onsets
+      may cluster in a barrage pattern. Designed as TELEGRAPH_WINDOW_FLOOR_S / 2 —
+      this ratio is what makes barrage onset timing perceptually distinct from
+      staggered-at-floor non-barrage patterns; W near TELEGRAPH_WINDOW_FLOOR_S
+      collapses barrage identity. Value is PROVISIONAL pending DPC AC-PILLAR-2-BARRAGE
+      close at the prototype milestone.
+
+      R2 Cluster E (2026-06-08) raised TELEGRAPH_WINDOW_FLOOR_S to 0.65s under
+      path (b); under the FLOOR/2 ratio that implied W = 0.325s. That value was
+      deferred pending DPC author confirmation.
+
+      2026-06-11 (PM R9 cross-system coordination): Option (c) bound; FLOOR
+      held at 0.65s; derivation target was 0.325s; current value 0.3 was left
+      in place pending DPC R7+ revision.
+
+      2026-06-17/18 (Pull-Wave R10d FLOOR raise + R11a-arithmetic propagation):
+      TELEGRAPH_WINDOW_FLOOR_S raised 0.65 → 0.70s via CD PATH (i) ruling. Under
+      the FLOOR/2 design intent the new derivation target is W = 0.35s
+      (= 0.70 / 2). The R2 Cluster E 0.325s target is retired; the rejected
+      R8-era 0.34s derivation (Option (b)) remains withdrawn. Current value
+      0.3 was left in place until DPC author confirms 0.3 vs 0.35s at next
+      DPC re-review (resolved 2026-06-19 — see next entry).
+
+      2026-06-19 (/propagate-design-change post-R14): RESOLVED. Value flipped
+      0.3 → 0.35s per user decision restoring the FLOOR/2 design ratio at
+      new FLOOR=0.70s. Hold-condition "DPC R-Updated re-review confirmation"
+      satisfied by R14 APPROVED-on-first-pass 2026-06-19 (Pull-Wave + DPC both
+      TERMINAL; R7→R14 trajectory closed). Lock-step oracle-site updates
+      applied per ADR-0004 dual-grep methodology at: DPC §AC-PILLAR-2-BARRAGE
+      Path A (line 944) `BARRAGE_SIMULTANEITY_WINDOW_S = 0.3s` → `0.35s`;
+      Pull-Wave EC-CONCURRENT-LANDING-ON-SAME-LANE (line 535) `W = 0.3s` →
+      `W = 0.35s`. Cross-system survivability invariant UNAFFECTED — W is
+      the simultaneity window (max time span across M onsets), not the escape
+      budget (which is bound by TELEGRAPH_WINDOW_FLOOR_S vs MIN_ESCAPE_SLIPS ×
+      SLIP_TWEEN + REACT). Provisional status retained pending DPC
+      AC-PILLAR-2-BARRAGE prototype-milestone close.
+
+      Sourced from DPC GDD Pillar Alignment Under Option B + cross-pattern stagger policy.
+    added: 2026-06-05
+    revised: "2026-06-18"
+
+  - name: BARRAGE_EVENTS_PER_PEAK_MIN
+    status: active
+    source: design/gdd/difficulty-phase-controller.md
+    referenced_by:
+      - design/gdd/difficulty-phase-controller.md
+    value: 1
+    unit: barrage events per PEAK window (count)
+    notes: >
+      Minimum barrage events per PEAK run window. Identity-layer floor: N < 1 in any
+      PEAK window means the phase's exclusive identity moment (barrage) is unobservable
+      that run, which violates the Phase Identity section. This floor is LOCKED —
+      revising it requires reopening Phase Identity and Player Fantasy under CD sign-off.
+      Wave Spawner's pattern selection rule MUST structurally guarantee ≥1 barrage per
+      PEAK (a purely probabilistic selection rule can produce N=0 runs and is non-compliant).
+      Sourced from DPC GDD Phase Identity section.
+    added: 2026-06-05
+    revised: ""
+
+  - name: BARRAGE_EVENTS_PER_PEAK_MAX
+    status: active
+    source: design/gdd/difficulty-phase-controller.md
+    referenced_by:
+      - design/gdd/difficulty-phase-controller.md
+    value: 3
+    unit: barrage events per PEAK window (count)
+    notes: >
+      Maximum barrage events per PEAK run window. Identity-layer ceiling: above N=3
+      in a 15-second PEAK (at default RUN_DURATION_S=60s), barrages cease to be
+      climax moments and read as steady-state barrage, collapsing the contrast that
+      makes barrage feel like a "commit." Estimated ~7-10 pattern starts per PEAK
+      at default settings; N_max=3 represents ~30-43% barrage frequency, which keeps
+      barrage as a moment, not a steady state. This ceiling is LOCKED — revising it
+      requires reopening Phase Identity and Player Fantasy under CD sign-off.
+      Sourced from DPC GDD Phase Identity section.
+    added: 2026-06-05
+    revised: ""
+
+  - name: BARRAGE_EVENTS_PER_PEAK_TARGET_AVG
+    status: active
+    source: design/gdd/difficulty-phase-controller.md
+    referenced_by:
+      - design/gdd/difficulty-phase-controller.md
+    value: 2
+    unit: barrage events per PEAK window (count, average over run sample)
+    notes: >
+      Target average barrage events per PEAK window across a session of runs.
+      Calibrated between MIN (1) and MAX (3) to provide consistent climax-beat
+      frequency without over-exposing the barrage pattern. Identity-layer target.
+      Wave Spawner's selection mechanism should approximate this average over a
+      rolling window of runs (not enforce it per-run — per-run variation between
+      MIN and MAX is acceptable and desirable for run diversity). LOCKED —
+      revising requires CD sign-off on Player Fantasy.
+      Sourced from DPC GDD Phase Identity section.
+    added: 2026-06-05
+    revised: ""
+
+  - name: MAX_CONCURRENT_WAVES_CAP
+    status: active
+    source: design/gdd/difficulty-phase-controller.md
+    referenced_by:
+      - design/gdd/difficulty-phase-controller.md
+      - design/gdd/wave-spawner-pattern-library.md  # added 2026-06-23 per Wave Spawner R3a /propagate-design-change closure; Wave Spawner F-2 pool_size derivation + AC-WS-09 POOL_SIZE_DERIVATION_MATCH cook check + G.2 recompute trigger + F-1/F-1b slot accounting + Rule 7 admission cap all consume this constant
+    value: 16
+    unit: waves (count)
+    notes: >
+      Structural upper ceiling on max_concurrent_waves — non-tunable, not exposed
+      as a curve or designer knob. Enforced by clamping the MaxConcurrentWavesCurve
+      float return value before FMath::FloorToInt32 in F-3c and Rule 8 to prevent
+      implementation-defined ARM behavior on large-but-finite curve returns (R4
+      performance-analyst BLOCKING on FloorToInt32 finite-overflow). Value 16 is
+      ~5× the designed PEAK maximum of 3, far above any operating range. Raising
+      this value requires a code change and technical-director sign-off; it is
+      intentionally not in curve configuration.
+    added: 2026-06-05
+    revised: ""
+
+  - name: MAX_CONCURRENT_WAVES_FLOOR
+    status: active
+    source: design/gdd/difficulty-phase-controller.md
+    referenced_by:
+      - design/gdd/difficulty-phase-controller.md
+    value: 1
+    unit: waves (count)
+    notes: >
+      Structural lower floor on max_concurrent_waves — non-tunable, not exposed as
+      a designer knob. Prevents a misconfigured MaxConcurrentWavesCurve from
+      producing zero concurrent waves (a "dead run" state where Wave Spawner
+      receives a cap of 0 and issues no spawns). Enforced on the float side of
+      the FMath::Clamp before FMath::FloorToInt32 in F-3c and Rule 8. Referenced
+      by the inactive snapshot (max_concurrent_waves = 1 at t_norm = 0.0), F-3c
+      clamp formula, Rule 8 code block, AC-08a/08c, and the Tuning Knobs
+      non-tunable invariants table. Also referenced by Wave Spawner via the DPC
+      snapshot contract (max_concurrent_waves is always ≥ 1 when is_active is true).
+    added: 2026-06-05
+    revised: ""
+
+  - name: MIN_BARRAGE_LANE_SEPARATION
+    status: active
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/difficulty-phase-controller.md
+      - design/gdd/pull-wave-behavior.md
+    value: 1
+    unit: lanes (count)
+    notes: >
+      Spatial-separation floor between concurrent telegraph onsets within a barrage
+      pattern (is_barrage=true PEAK patterns). At M=3 barrage onsets within W≤0.3s,
+      any two onsets must be placed in different lanes (no two onsets share a lane;
+      adjacent lanes are permitted). Cook-time enforced by Wave Spawner asset
+      tooling on every is_barrage=true PEAK pattern; below-floor patterns fail cook
+      with a tooling error.
+
+      Status: CLOSED (active) per Pull-Wave Behavior GDD 2026-06-06 — closes OQ-DPC-6.
+      Source ownership transferred from DPC GDD to Pull-Wave GDD (Pull-Wave owns the
+      derivation via F-BARRAGE-SURVIVABILITY-INVARIANT). At NUM_LANES=5 (Pull-Wave
+      Rule 2, R1 CD adjudication) × separation=1: C(5,3)=10 distinct M=3 spatial
+      configurations, satisfying AC-PILLAR-2-BARRAGE-SPATIAL-K (≥4 required) with
+      2.5× margin.
+
+      **Semantic locked (R2 Cluster E CD adjudication 2026-06-08): separation is
+      measured on TARGET-LANE indices, not source-lane indices.** Adjacency
+      permitted; two concurrent barrage onsets must target different lanes. Wave
+      Spawner cook-time tooling enforces |target_lane_i − target_lane_j| ≥ 1 for
+      every pair of onsets in any is_barrage=true pattern. This semantic resolved
+      OQ-PW-5 convergence ambiguity at R2.
+
+      R7 history: R6 set provisional=2; R7 CD adjudication 2026-06-06 lowered to
+      provisional=1 (restored spatial authorability at plausible mobile lane counts).
+      Pull-Wave GDD 2026-06-06 finalizes the value at 1 and ties survivability to the
+      R2-revised F-BARRAGE-SURVIVABILITY-INVARIANT:
+      SLIP_TWEEN_DURATION_S × MIN_ESCAPE_SLIPS + REACTION_BUDGET ≤ TELEGRAPH_WINDOW_FLOOR_S.
+
+      **2026-06-11 (PM R9 cross-system coordination resolution)**: MIN_ESCAPE_SLIPS
+      reduced from 3 to 2 under Option (c) — Wave Spawner cook-time triplet
+      exclusion. Pull-Wave R7 B8 (forbid all-consecutive M=3 triplets
+      {0,1,2}, {1,2,3}, {2,3,4}) promotes ADVISORY → BLOCKING. Surviving M=3
+      triplets: {0,1,3}, {0,1,4}, {0,2,3}, {0,2,4}, {0,3,4}, {1,2,4}, {1,3,4}
+      (7 configs at C(5,3)=10 − 3 excluded). Worst-case escape across all
+      7 × 5 player-lane positions = 2 slips (enumerated by creative-director
+      adjudication). AC-PILLAR-2-BARRAGE-SPATIAL-K floor stays ≥4 with 1.75×
+      margin from the 7 surviving configs. Separation value itself unchanged
+      at 1 (target-lane semantic from R2 Cluster E preserved). See new
+      MIN_ESCAPE_SLIPS constant below.
+
+      Raising this requires re-verifying AC-PILLAR-2-BARRAGE-SPATIAL-K against
+      NUM_LANES AND raising NUM_LANES to preserve ≥4 spatial configs AND
+      re-verifying the survivability invariant.
+    added: 2026-06-05
+    revised: "2026-06-11"
+
+  - name: MIN_ESCAPE_SLIPS
+    status: provisional
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+      - design/gdd/player-movement-mechanics.md  # Step 8 routing 2026-07-01 — MIN_ESCAPE_SLIPS is consumed by PM Rules 4 + 7 (mechanics)
+      - design/gdd/player-movement-platform.md   # Step 8 routing 2026-07-01 — MIN_ESCAPE_SLIPS is also enforced by PM Shipping-Safety AC-SS-E static_assert (platform) per R11a-17
+      - design/gdd/difficulty-phase-controller.md
+    value: 2
+    unit: slips (count)
+    notes: >
+      Worst-case escape-slip count from any player lane required to reach a
+      safe lane during an M=3 PEAK barrage telegraph window. Multiplicand in
+      F-BARRAGE-SURVIVABILITY-INVARIANT:
+      SLIP_TWEEN_DURATION_S × MIN_ESCAPE_SLIPS + REACTION_BUDGET ≤ TELEGRAPH_WINDOW_FLOOR_S.
+
+      Bound at 2 by PM R9 cross-system coordination resolution (2026-06-11,
+      Option (c)). Pull-Wave R7 B8 ADVISORY → BLOCKING promotion cooks out
+      the three all-consecutive M=3 triplets {0,1,2}, {1,2,3}, {2,3,4}.
+      Worst-case escape across all 7 surviving M=3 triplets × 5 player lanes
+      was enumerated by creative-director adjudication and confirmed = 2
+      slips. The prior implicit MIN_ESCAPE_SLIPS = MAX_PULLS_PER_BARRAGE = 3
+      figure became internally inconsistent once R7 B8 promotes to BLOCKING
+      (specifies survivability against configurations that cannot exist).
+
+      Surviving M=3 triplets bound by Wave Spawner cook-time tooling:
+      {0,1,3}, {0,1,4}, {0,2,3}, {0,2,4}, {0,3,4}, {1,2,4}, {1,3,4}.
+
+      Margin verification at 60fps minimum, worst-case REACTION_BUDGET = 0.25s:
+      0.15 × 2 + 0.25 = 0.55 ≤ 0.65 → 100ms (6 frames at 60fps) margin.
+      Margin at REACT default 0.20s: 0.15 × 2 + 0.20 = 0.50 ≤ 0.65 → 150ms
+      (9 frames) margin.
+
+      Provisional pending Pull-Wave R8 fresh-context re-review confirming
+      R7 B8 BLOCKING promotion + new AC-WS-COOK-EXCLUDE-CONSECUTIVE-M3.
+      Raising MIN_ESCAPE_SLIPS would force a Pillar 5 re-derivation across
+      PM Hardware Contract (60fps minimum) and TELEGRAPH_WINDOW_FLOOR_S.
+
+      See design/gdd/reviews/cross-system-survivability-coordination-2026-06-11.md
+      for full adjudication.
+    added: 2026-06-11
+    revised: ""
+
+  - name: NUM_LANES
+    status: active
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+      - design/gdd/difficulty-phase-controller.md
+    value: 5
+    unit: lanes (count)
+    notes: >
+      Total lane count on the SLIPSTORM track. Locked by Pull-Wave Rule 2 as a
+      cross-cluster decision with DPC R7's AC-PILLAR-2-BARRAGE-SPATIAL-K forward
+      contract. At NUM_LANES=5 × MIN_BARRAGE_LANE_SEPARATION=1 (target-lane distinct):
+      C(5,3)=10 distinct M=3 spatial configurations exist (≥4 required by
+      AC-PILLAR-2-BARRAGE-SPATIAL-K) — 2.5× margin.
+
+      **Lane count revised from R1-draft 6 to 5 (R1 CD adjudication 2026-06-07):**
+      at LANE_WIDTH_M = 1.0m, 5-lane on-screen lane width on a 6-inch mobile screen
+      sits comfortably above the thumb-target floor (≈14mm vs ≈11.7mm at 6 lanes);
+      C(5,3)=10 still provides 2.5× the AC ≥4 floor. Registry entry was stale
+      (kept value=6 through 2026-06-06–07); corrected R2 Cluster catch-up
+      2026-06-08.
+
+      Supersedes Player Movement Rule 1's 3-lane model (Left/Center/Right). Forces
+      Player Movement GDD revision via /propagate-design-change at Pull-Wave GDD
+      completion: EPlayerLane enum widens to 5 members (or replaced by int32 lane
+      index), LANE_OFFSET_CM reorganizes into LANE_WIDTH_M × signed offset.
+
+      Non-tunable runtime invariant. Reducing this requires re-verifying
+      AC-PILLAR-2-BARRAGE-SPATIAL-K against the then-current MIN_BARRAGE_LANE_SEPARATION,
+      Player Movement re-revision, and mobile UX impact assessment. Raising requires
+      CD sign-off and reopens the mobile thumb-target check.
+    added: 2026-06-06
+    revised: "2026-06-08"
+
+  - name: LANE_WIDTH_M
+    status: provisional
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+    value: 1.0
+    unit: meters
+    notes: >
+      World-space width of each lane in meters. Provisional pending Player Movement
+      revision — PM will own this constant once revised (LANE_OFFSET_CM reorganizes
+      into LANE_WIDTH_M × signed lane offsets from track center).
+
+      Affects world_x output range in Pull-Wave F-TRAJ-LATERAL: at default 1.0m
+      and NUM_LANES=5, track total width = 5.0m (5 lanes × 1.0m). Mobile
+      finger-reach at 6" screen ≈ 14mm per lane — comfortably above thumb-target
+      floor; raising to 1.2m widens lanes but pushes total to 6.0m which may
+      exceed comfortable on-screen track width. Safe range: [0.75, 1.5] meters.
+
+      Source ownership will transfer from Pull-Wave to Player Movement when PM
+      revision lands.
+    added: 2026-06-06
+    revised: "2026-06-08"
+
+  - name: SPAWN_PLANE_Z_OFFSET_M
+    status: active
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+    value: 15.0
+    unit: meters
+    notes: >
+      Distance in the local-Z axis (toward camera) from the player plane to the
+      wave spawn plane. Tuning knob; safe range [10.0, 25.0] meters. Affects
+      Pull-Wave's TravelDurationS = SPAWN_PLANE_Z_OFFSET_M / ForwardVelocityMs;
+      at default 15.0m × max velocity 18.0 m/s = 0.83s TRAVERSING; at min velocity
+      4.0 m/s = 3.75s TRAVERSING. Cook-time tooling warns when patterns combined
+      with low velocity produce TravelDurationS > 5.0s (EC-WAVE-LIFETIME-OVERRUN).
+    added: 2026-06-06
+    revised: ""
+
+  - name: PULL_WAVE_VELOCITY_MIN_MS
+    status: active
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+    value: 4.0
+    unit: meters/second
+    notes: >
+      Lower bound on per-pattern authored ForwardVelocityMs. Wave Spawner
+      cook-time validation rejects patterns below this. Lower values produce
+      long-hang slow pulls (rewards attentive reads); risk of stale pacing at
+      OPENER if too low. Safe range [2.0, 6.0] m/s.
+    added: 2026-06-06
+    revised: ""
+
+  - name: PULL_WAVE_VELOCITY_MAX_MS
+    status: active
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+    value: 18.0
+    unit: meters/second
+    notes: >
+      Upper bound on per-pattern authored ForwardVelocityMs. Wave Spawner
+      cook-time validation rejects patterns above this. Higher values compress
+      TRAVERSING reaction window (LEANING duration is phase-independent — only
+      TRAVERSING shrinks). Above 14 m/s, cook-time tooling warns about
+      combination with LeanDurationS < 0.6s. Safe range [12.0, 24.0] m/s.
+    added: 2026-06-06
+    revised: ""
+
+  - name: WAVE_DESPAWN_HOLD_S
+    status: active
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+    value: 0.15
+    unit: seconds
+    notes: >
+      Time held in Pull-Wave's LANDED state after collision check fires, before
+      transition to DESPAWNING. Allows Telegraph System's landing-impact VFX to
+      complete on-screen. Lower values risk truncated VFX; higher values delay
+      slot reclamation (impacts Wave Spawner's deferred queue if cap is full).
+      Safe range [0.075, 0.5] seconds (R5 B6 — floor raised 0.05 → 0.075 so
+      it stays strictly greater than NEAR_MISS_FLASH_DURATION_S = 0.066s; the
+      previous 0.05 floor would truncate the near-miss flash mid-animation at
+      floor configuration, regressing Pillar 5 readability). Cross-knob: any
+      future raise of NEAR_MISS_FLASH_DURATION_S past 0.075s requires raising
+      this floor in lockstep.
+    added: 2026-06-06
+    revised: 2026-06-09
+
+  # LEAN_ANGLE_MAX_DEG retired R2 Cluster C (2026-06-08) — superseded by 4-tier
+  # LEAN_ANGLE_TIER{1,2,3,4}_DEG entries below. Old value 28° is preserved as
+  # LEAN_ANGLE_TIER4_DEG. The 3-tier collapse where 3-lane and 4-lane shifts
+  # both mapped to 28° was a Pillar 2 destination-from-lean breach; the 4-tier
+  # spec (17°/22°/25°/28°) closes the disambiguation gap.
+
+  - name: LEAN_ANGLE_TIER0_DEG
+    status: active
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+    value: 0.0
+    unit: degrees
+    notes: >
+      Locked constant for tier-0 (straight-forward) waves where
+      abs(target_lane − source_lane) == 0. 0.0° is structurally bound: the angle
+      channel encodes magnitude; tier-0's magnitude is zero by definition. Any
+      nonzero value would mis-signal a lateral commit on a straight-forward wave
+      (Pillar 2 violation). NOT TUNABLE — listed for symmetric reference with
+      tiers 1–4 only; no safe range. Tier-0 still ramps LeanChargeIntensity via
+      the eased curve (brightness carries phase, not magnitude — see
+      LEAN_BRIGHTNESS_PEAK_RATIO notes and Pull-Wave Channel-separation
+      rationale). (R4 RC-R3-2 first-class addition 2026-06-08.)
+    added: 2026-06-08
+    revised: ""
+
+  - name: LEAN_ANGLE_TIER1_DEG
+    status: provisional
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+    value: 17.0
+    unit: degrees
+    notes: >
+      Maximum lean angle at lean_progress=1.0 for a 1-lane shift. Feel knob.
+      Lower bound 14° must be visually distinct from "no lean"
+      (LEAN_ANGLE_TIER0_DEG = 0.0°). Upper bound 20° must be visually distinct
+      from tier-2. Safe range: [14.0, 20.0] degrees. Do NOT raise above tier-2
+      value. Cross-knob ordering invariant (R4 RC-R3-2):
+      LEAN_ANGLE_TIER0_DEG (0.0) < TIER1 < TIER2 < TIER3 < TIER4 always.
+      (R2 Cluster C CD adjudication 2026-06-08.)
+    added: 2026-06-08
+    revised: ""
+
+  - name: LEAN_ANGLE_TIER2_DEG
+    status: provisional
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+    value: 22.0
+    unit: degrees
+    notes: >
+      Maximum lean angle for a 2-lane shift. Feel knob. Must be visually
+      distinct from tier-1 and tier-3. Safe range: [18.0, 24.0] degrees;
+      chosen to preserve >3° gap below tier-3 default (25°) and >3° gap above
+      tier-1 default (17°). (R2 Cluster C CD adjudication 2026-06-08.)
+    added: 2026-06-08
+    revised: ""
+
+  - name: LEAN_ANGLE_TIER3_DEG
+    status: provisional
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+    value: 25.0
+    unit: degrees
+    notes: >
+      Maximum lean angle for a 3-lane shift. Feel knob. Must be visually
+      distinct from tier-2 and tier-4. Safe range: [21.0, 27.0] degrees.
+      The 25°→28° gap (3°) is the narrowest inter-tier step — prototype must
+      validate this is reliably perceived at 6-inch mobile viewing distance
+      before finalizing. Do NOT raise above tier-4 value.
+      (R2 Cluster C CD adjudication 2026-06-08.)
+    added: 2026-06-08
+    revised: ""
+
+  - name: LEAN_ANGLE_TIER4_DEG
+    status: provisional
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+    value: 28.0
+    unit: degrees
+    notes: >
+      Maximum lean angle for a 4-lane shift (maximum possible lane delta on a
+      5-lane track). Feel knob. Safe range: [25.0, 32.0] degrees. Upper bound:
+      physical plausibility (beyond ~35° the voxel mass reads as "falling over"
+      not "leaning toward"). This is the angular ceiling of the entire
+      lean-readability system; raising it may improve tier-4 vs tier-3
+      discrimination but compress tier-3 headroom below. Tune as a pair with
+      LEAN_ANGLE_TIER3_DEG. Preserves the prior LEAN_ANGLE_MAX_DEG value (28°)
+      under the new 4-tier scheme. Telegraph System reads
+      lean_progress + lean_magnitude_tier from Pull-Wave's data contract and
+      applies the rotation in its rendering layer. Pull-Wave provides the data;
+      Telegraph System paints it.
+      (R2 Cluster C CD adjudication 2026-06-08; R7 B6 — safe-range lower
+      bound tightened 25.0 → 28.0 so TIER3_max=25 + LEAN_ANGLE_MIN_TIER_GAP_DEG=3
+      ≤ TIER4_min=28 holds structurally without relying on the joint static_assert.)
+    added: 2026-06-08
+    revised: 2026-06-10
+
+  - name: LEAN_ANGLE_MIN_TIER_GAP_DEG
+    status: active
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+    value: 3.0
+    unit: degrees
+    notes: >
+      Minimum angular gap between adjacent lean-magnitude tiers (R7 B6 — NEW;
+      RC-D Pillar 2 binding; art-director R6 RECOMMENDED escalated to BLOCKING
+      at R7). Prototype-validated perceptibility threshold at 6-inch mobile
+      non-foveal viewing for rotational deltas on a 3×3×3-unit voxel mass.
+      Below 3°, adjacent-tier waves read as visually identical — a Pillar 2
+      failure mode (e.g., tier-3 vs tier-4 confusion on a 5-lane track means
+      the player at lane 0 cannot tell whether the safe escape is right-3-lanes
+      or right-4-lanes, a 50/50 lottery on the highest-consequence read; the
+      identical pre-4-tier 28° collapse failure mode the 5-tier system was
+      designed to fix).
+
+      Enforced jointly across all four adjacent-tier pairs at build time via
+      AC-PW-22b sub-patterns 7e-7h: each pattern is a static_assert
+      `(TIER_{i+1} - TIER_i) >= LEAN_ANGLE_MIN_TIER_GAP_DEG` for
+      i ∈ {0, 1, 2, 3}. Defaults (TIER1=17, TIER2=22, TIER3=25, TIER4=28)
+      sit at gaps 5/3/3 — last two pairs at MIN_GAP floor.
+
+      Defense-in-depth: per-knob safe ranges for TIER3 and TIER4 were
+      tightened at R7 B6 to make the TIER3/TIER4 pair non-overlapping at
+      MIN_GAP=3 structurally (TIER3 upper 27→25, TIER4 lower 25→28); the
+      MIN_GAP static_assert is the joint long-stop for TIER1/TIER2 and
+      TIER2/TIER3 pairs which retain per-knob safe range overlap for tuner
+      flexibility.
+
+      Lowering this constant requires re-running the 6-inch mobile non-foveal
+      perceptibility analysis with new prototype evidence; raising it forces
+      tier-range collapse (raising MIN_GAP to 4° would force TIER3/TIER4
+      default 25→28 gap to widen, requiring re-derivation of the 4-tier
+      angular ceiling).
+
+      Locked / not a tuner-facing knob. Pull-Wave-owned; Telegraph GDD must
+      respect this floor when authoring tier-to-visual angle mappings.
+      (Added 2026-06-10 R7 B6 per art-director R6 RECOMMENDED escalation
+      to BLOCKING; closes the adversarial gap-collapse path TIER3=27 +
+      TIER4=28 = 1° that R6 left unaddressed.)
+    added: 2026-06-10
+    revised: ""
+
+  - name: LeanEaseCurve_Canonical
+    status: active
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+    value: "Content/Game/PullWave/Curves/LeanEaseCurve_Canonical.uasset"
+    unit: asset path (UCurveFloat)
+    notes: >
+      Canonical ease-in-out curve asset driving BOTH wave-mass rotation
+      (lean_angle_deg = lean_progress × LEAN_ANGLE_DEG_BY_TIER[tier]) AND
+      brightness ramp (LeanChargeIntensity_scalar = 1.0 + EaseCurve(lean_progress)
+      × (LEAN_BRIGHTNESS_PEAK_RATIO - 1.0)). The single shared curve guarantees
+      brightness and rotation are always in-phase (Pillar 2 windup-before-punch
+      ordering — R2 Cluster F binding).
+
+      Control points (registry-locked, NOT design intent guidance):
+      0.0 → 0.0, 0.4 → 0.15, 0.7 → 0.7, 1.0 → 1.0.
+
+      Interpolation mode (R10b — pinned 2026-06-16 per R9 systems-designer F1;
+      was implicit in fingerprint targets, now binding metadata): every
+      FRichCurveKey on the canonical asset MUST have
+        InterpMode  = RCIM_Cubic
+        TangentMode = RCTM_Auto
+      This is the UE UCurveFloat editor default — the pin makes it explicit
+      and cook-time-verifiable. Linear interpolation would silently change
+      the fingerprint values at intermediate t (e.g., linear between
+      (0.0, 0.0) and (0.4, 0.15) yields 0.094 at t=0.25, contradicting the
+      0.038 fingerprint target) and would shift the EC-EASE-CURVE-ONSET-DELAY
+      perceptibility-onset arithmetic by ~30ms — the survivability invariant
+      math depends on the cubic curve's t_perceptible_direction ≈ 0.13–0.15s
+      figure, which is unique to cubic Hermite + auto tangents on these
+      control points.
+
+      Cook-time fingerprint check (R7 B7 — NEW; extended R10b 2026-06-16):
+      Wave Spawner authoring tooling validates the canonical asset at admission
+      via TWO checks:
+        (1) Control-point sample check: sample at five reference t values and
+            assert return values within CURVE_ENDPOINT_TOLERANCE=0.005 of the
+            registry-locked targets:
+              t=0.0  → expected 0.0;   tolerance 0.005
+              t=0.25 → expected ~0.038 (interpolated; tolerance 0.005)
+              t=0.4  → expected 0.15;  tolerance 0.005
+              t=0.7  → expected 0.7;   tolerance 0.005
+              t=1.0  → expected 1.0;   tolerance 0.005
+        (2) Interpolation-metadata check (R10b — NEW): iterate the asset's
+            FRichCurve key array and assert each key's InterpMode == RCIM_Cubic
+            AND TangentMode == RCTM_Auto. Any other combination halts admission
+            with an error citing R9 systems-designer F1.
+      The two-check fingerprint is the long-stop against substitution of a
+      standard cubic ease-in-out preset (which returns ~0.10 at t=0.4 — check
+      (1) catches it) OR a linear-interpolated variant on the same control
+      points (which returns 0.094 at t=0.25 — check (1) ALSO catches it; check
+      (2) catches it pre-evaluation as defense-in-depth and as a clearer error
+      message for the authoring tooling user).
+
+      Source-code enforcement: AC-PW-22b pattern 12 (R7 B7 — NEW) FORBIDs
+      inlined `UCurveFloat*` direct-load construction in the rotation-driver
+      source path; the canonical curve MUST be loaded by registry name.
+
+      Material-dependency note: if the LeanChargeIntensity formula or the
+      LEAN_BRIGHTNESS_PEAK_RATIO floor are revised, this curve's control
+      points may need re-validation against the new phase-alignment math.
+
+      (Added 2026-06-10 R7 B7 per art-director R6 RECOMMENDED escalated to
+      BLOCKING at R7; closes the unverifiable-curve-asset class that R6
+      left unaddressed. Revised 2026-06-16 R10b measurement sub-pass per
+      R9 systems-designer F1: interpolation_mode = RCIM_Cubic and
+      tangent_mode = RCTM_Auto pinned as binding metadata; cook-time
+      fingerprint check extended to verify these on every FRichCurveKey.
+      Closes the systems-designer F1 finding that EC-EASE-CURVE-ONSET-DELAY
+      arithmetic magnitude is interpretation-dependent — cubic gives
+      ~30ms margin under direction-detection at REACT default; linear
+      would give 21ms. The cubic value is the one EC-EASE-CURVE-ONSET-DELAY
+      and AC-PW-TIER1-PERCEPTIBILITY assume; pinning makes it binding.)
+    added: 2026-06-10
+    revised: "2026-06-16"
+
+  - name: LEAN_BRIGHTNESS_PEAK_RATIO
+    status: provisional
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+    value: 1.8
+    unit: ratio (dimensionless)
+    notes: >
+      Peak brightness multiplier on the wave-mass specular highlight band at
+      lean_progress=1.0, applied via the `LeanChargeIntensity` material scalar
+      routed through PerInstanceCustomData[0]. Base brightness (lean_progress=0.0)
+      = 1.0×; peak (lean_progress=1.0) = 1.8×. Driven by EaseCurve(lean_progress),
+      not raw lean_progress, to keep brightness phase aligned with rotation phase
+      (Pillar 2 windup→punch ordering — see Pull-Wave GDD R2 Cluster F binding).
+      Uniform across ALL 5 lean_magnitude_tier values (R4 RC-R3-2 — extended
+      from 4 to include tier-0). Brightness carries PHASE only; the angle
+      channel carries MAGNITUDE. Channel-separation rationale (R3 CD adjudication
+      #2): driving brightness from magnitude would create dual-coding (player
+      reads both intensity AND angle to determine destination) and would make
+      tier-0 visually mute during LEANING, degrading the read-and-react loop.
+      Tier-0 (zero rotation) therefore still ramps brightness 1.0× → 1.8× via
+      the eased curve, communicating "wave is approaching on this lane" in the
+      time dimension. Implementation MUST read this from the registry (or a
+      control-manifest constant), never hardcode 1.8 inline in shader code or
+      game code (per technical-preferences.md data-driven rule).
+      Safe range [1.7, 2.2] (R6 B3 — floor raised 1.5 → 1.7 against dark
+      iron-gray base palette RGB 55-65 / 50-60 / 45-55): at 1.5× peak on the
+      current dark base, the lit-face lift is ~28 RGB points — below reliable
+      non-foveal perception threshold at 6-inch mobile viewing distance. At
+      1.7× peak the lift is ~42 RGB points, comfortably above threshold. Above
+      2.2 begins to wash out voxel material detail. Material-dependency note:
+      this floor is conditional on the art-bible-locked base palette staying
+      in the RGB ~60 average band. If art bible raises base luminance to RGB
+      ≥100, the 1.7 floor may be re-evaluated downward against the new palette;
+      if art bible darkens the base further, the floor must rise above 1.7×.
+      (Added 2026-06-08 R2 Cluster F per advisor recommendation; tier-0 inclusion
+      + channel-separation rationale clarified R4 RC-R3-2 + RC-R3-6 2026-06-08;
+      safe-range floor raised R6 B3 2026-06-10 against dark iron-gray base.)
+    added: 2026-06-08
+    revised: 2026-06-10
+
+  - name: NEAR_MISS_FLASH_DURATION_S
+    status: active
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+    value: 0.066
+    unit: seconds
+    notes: >
+      Duration of the wave-side near-miss chromatic edge flash on the
+      source-lane-facing voxel faces (Pull-Wave Visual section). TIME-BASED,
+      not frame-count — the prior R3 2-frame spec collapsed to 16ms at 120Hz
+      (below the 50–80ms reliable conscious-perception threshold for a
+      peripheral chromatic event). 0.066s = ≈4 frames @ 60Hz / ≈2 @ 30Hz / ≈8 @
+      120Hz; sits at the threshold floor at any frame rate.
+
+      Implementation: NearMissEdgeFlash material scalar routed through
+      PerInstanceCustomData[1], driven by a frame-rate-independent time
+      accumulator (flash_elapsed_s += DeltaTime; intensity =
+      max(0, 1.0 − flash_elapsed_s / NEAR_MISS_FLASH_DURATION_S)). Composites
+      independently of PM's Y-dip; remains in the batched ISMC draw call.
+
+      Safe range [0.050, 0.120] seconds: lower bound is the conscious-perception
+      floor; upper bound prevents the flash from outliving the LANDED hold
+      (WAVE_DESPAWN_HOLD_S = 0.15s default; raising the flash past the hold
+      duration truncates the flash on DESPAWNING). Knob-interaction note: if
+      WAVE_DESPAWN_HOLD_S is ever tightened below NEAR_MISS_FLASH_DURATION_S,
+      the flash is truncated — surface as cross-knob review trigger.
+      (Added 2026-06-08 R4 RC-R3-6 per R3 3-way convergence finding; replaces
+      the frame-count-based 2-frame spec.)
+    added: 2026-06-08
+    revised: ""
+
+  - name: REACTION_BUDGET
+    status: provisional
+    source: design/gdd/pull-wave-behavior.md
+    referenced_by:
+      - design/gdd/pull-wave-behavior.md
+    value: 0.20
+    unit: seconds
+    notes: >
+      Mobile recognition floor: time consumed between telegraph-read and first
+      slip-initiation on a 6-inch capacitive touch screen. Decomposes as:
+      visual acquisition (~0.07s) + parse + decision (~0.08s) + motor initiation
+      (~0.05s). Additive term in F-BARRAGE-SURVIVABILITY-INVARIANT (Pull-Wave)
+      alongside SLIP_TWEEN × MIN_ESCAPE_SLIPS.
+
+      Provisional pending playtest evidence. Safe range [0.20, 0.25] seconds:
+      lower bound is the empirical mobile recognition floor — reducing below
+      0.20s requires platform-specific evidence that SLIPSTORM's pre-telegraphed
+      pattern structure reduces acquisition latency AND CD sign-off on the Player
+      Fantasy survivability promise. Upper bound (0.25s) covers degraded-attention
+      scenarios; raising past 0.20s forces TELEGRAPH_WINDOW_FLOOR_S raise.
+
+      At current PM R9 Option (c)-resolved defaults (SLIP_TWEEN = 0.15s,
+      MIN_ESCAPE_SLIPS = 2, TELEGRAPH_FLOOR = 0.65s): 0.15 × 2 + 0.20 = 0.50
+      ≤ 0.65 → 150ms margin at REACT default; 0.15 × 2 + 0.25 = 0.55 ≤ 0.65
+      → 100ms margin at REACT safe-range ceiling. Invariant holds with ≥6
+      frame margin at 60fps minimum across the full REACT safe range — Pillar
+      5 ("no deaths attributable to latency / device") survivability promise
+      preserved without degraded-attention carve-out. See PM R9 cross-system
+      coordination resolution at
+      design/gdd/reviews/cross-system-survivability-coordination-2026-06-11.md.
+      Cannot be revised without re-verifying F-BARRAGE-SURVIVABILITY-INVARIANT.
+    added: 2026-06-08
+    revised: "2026-06-11"
+=======
 constants: []
+>>>>>>> myorigin/main
 
 # Example:
 #
