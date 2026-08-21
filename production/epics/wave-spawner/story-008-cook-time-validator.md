@@ -1,12 +1,12 @@
 # Story 008: Cook-Time Validator (14 Binding Rule 15 Checks)
 
 > **Epic**: Wave Spawner Pattern Library
-> **Status**: Ready
+> **Status**: Complete
 > **Layer**: Feature
 > **Type**: Logic
 > **Estimate**: (fill before sprint planning)
 > **Manifest Version**: (none — docs/architecture/control-manifest.md not found; run /create-control-manifest)
-> **Last Updated**: 2026-08-19
+> **Last Updated**: 2026-08-21
 
 ## Context
 
@@ -162,3 +162,14 @@ static void CheckBarrageWSpan(const FPatternPool& Pool, TArray<FString>& OutErro
 
 - Depends on: Story 001 (`FPatternPool` and `FPatternDefinition` struct definitions)
 - Unlocks: Pool authoring can be validated before Story 007's RSM integration — validator can run in CI independently
+
+## Completion Notes
+**Completed**: 2026-08-21
+**Criteria**: 14/14 passing (all BLOCKING)
+**Deviations**:
+- Story implementation note used `U` prefix; corrected to `FWaveSpawnerCookTimeValidator` per UE naming convention (F prefix for plain C++ types)
+- `WaveSpawnerTypes.h` extended with 5 new cook-time fields (out of stated scope, valid dependency — Story 008 is the cook-time consumer)
+- ADR-0011 D4 table amended: replaced `PEAK_NO_ADJACENT_CLUSTER`/`POOL_SIZE_DERIVATION_MATCH` with `MID_NO_BARRAGE`/`BARRAGE_W_SPAN`; corrected ≥ 2 → ≥ 1 per triplet in D1 and D4
+- Test coverage gaps GAP-1 through GAP-8 (pool-dispatch arms, multi-onset stagger passing case): advisory, recommend addressing in follow-up
+**Test Evidence**: `Source/SLIPSTORM/Tests/Unit/WaveSpawner/WaveSpawnerCookTimeValidatorTest.cpp` — 15 test commands (TC1–TC15)
+**Code Review**: Complete — APPROVED after 4 required fixes (rename U→F, remove unused include, remove redundant static, fix TC4 duplicate assertion)
