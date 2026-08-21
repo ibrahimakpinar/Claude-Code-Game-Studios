@@ -98,12 +98,12 @@ This epic is complete when:
 | 002 | [Six-State Lifecycle, Phase Drain, Atomic Pool Swap](story-002-six-state-lifecycle.md) | Logic | **Complete** | ADR-0011 D3 |
 | 003 | [Admission Gate + Cadence Gate (F-3b) + Primer Bypass](story-003-admission-gate-and-primer-bypass.md) | Logic | **Complete** | ADR-0011 D2 |
 | 004 | [Barrage Atomic Admission + barrage_owed Reservation](story-004-barrage-atomic-admission.md) | Logic | **Complete** | ADR-0011 D2 |
-| 005 | [Pattern Draw + Cadence Governor (F-3) + RNG Seeding](story-005-pattern-draw-and-cadence-governor.md) | Logic | Ready | ADR-0011 D2 |
-| 006 | [Despawn Pipeline + IWaveSpawnerCallback + Seam 13](story-006-despawn-pipeline-and-seam-13.md) | Integration | Ready | ADR-0011 D3 |
-| 007 | [RSM/DPC Integration — Pause Flush, Run Termination, Snapshot Immutability](story-007-rsm-dpc-integration.md) | Integration | Ready | ADR-0011 D3, ADR-0007, ADR-0008 |
-| 008 | [Cook-Time Validator (14 Binding Rule 15 Checks)](story-008-cook-time-validator.md) | Logic | Ready | ADR-0011 D4 |
-| 009 | [Telemetry + Edge-Case Defense + Performance Baseline](story-009-telemetry-and-edge-case-defense.md) | Integration | Ready | ADR-0011 D3 |
+| 005 | [Pattern Draw + Cadence Governor (F-3) + RNG Seeding](story-005-pattern-draw-and-cadence-governor.md) | Logic | **Complete** | ADR-0011 D2 |
+| 006 | [Despawn Pipeline + IWaveSpawnerCallback + Seam 13](story-006-despawn-pipeline-and-seam-13.md) | Integration | **Complete** | ADR-0011 D3 |
+| 007 | [RSM/DPC Integration — Pause Flush, Run Termination, Snapshot Immutability](story-007-rsm-dpc-integration.md) | Integration | **Complete** | ADR-0011 D3, ADR-0007, ADR-0008 |
+| 008 | [Cook-Time Validator (14 Binding Rule 15 Checks)](story-008-cook-time-validator.md) | Logic | **Complete** | ADR-0011 D4 |
+| 009 | [Telemetry + Edge-Case Defense + Performance Baseline](story-009-telemetry-and-edge-case-defense.md) | Integration | **Complete** | ADR-0011 D3 |
 
-## Next Step
+## Status
 
-Run `/story-readiness production/epics/wave-spawner/story-001-subsystem-class-and-object-pool.md` then `/dev-story` to begin implementation. Work through stories in order — each story's `Depends on:` field tells you what must be Done first.
+**Epic complete** — all 9 stories Done as of 2026-08-21. Wave Spawner system is fully implemented per ADR-0011.
