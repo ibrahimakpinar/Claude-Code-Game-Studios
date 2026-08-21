@@ -63,3 +63,12 @@ bool URunStateMachineSubsystem::IsResumeGrace() const
     return false;
 #endif
 }
+
+uint64 URunStateMachineSubsystem::GetRunSeed() const
+{
+    // TODO(RSM epic): stub — replace with ADR-0007 implementation.
+    // Full implementation: returns the 64-bit seed generated at COUNTDOWN→RUNNING
+    // and held for the duration of the run (used by WaveSpawnerSubsystem for TR-WS-013
+    // PatternRNG seeding and Death Replay determinism).
+    return 0;
+}

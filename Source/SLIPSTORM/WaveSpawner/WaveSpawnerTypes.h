@@ -207,3 +207,67 @@ enum class ERunPhase : uint8
      */
     Peak    UMETA(DisplayName = "Peak"),
 };
+
+// ---------------------------------------------------------------------------
+// EWaveDespawnReason — reason code for the Rule 12 DespawnWave() pipeline.
+//
+// Passed as the final argument to IWaveSpawnerCallback::OnWaveDespawned().
+// Fires for all three values; the pipeline order (CollisionUnregistered →
+// TelegraphUnregistered → OnWaveDespawned) is mandatory regardless of reason.
+//
+// None=0 sentinel: prevents {} initializer from aliasing NaturalLanding when
+// FDespawnEvent entries are constructed for CollisionUnregistered and
+// TelegraphUnregistered events (which carry no meaningful Reason value).
+//
+// Story: production/epics/wave-spawner/story-006-despawn-pipeline-and-seam-13.md
+// ADR:   docs/architecture/adr-0011-wave-spawner-pattern-library.md (D3, Rule 12)
+// TR:    TR-WS-026
+// ---------------------------------------------------------------------------
+UENUM(BlueprintType)
+enum class EWaveDespawnReason : uint8
+{
+    /** Sentinel — Reason field not applicable (CollisionUnregistered, TelegraphUnregistered events). */
+    None           = 0,
+
+    /** Wave completed its normal lifecycle (reached the landing zone). */
+    NaturalLanding = 1,
+
+    /** RSM moved to DEAD/COMPLETE/ABORTED (Story 007 run-termination path — Rule 14). */
+    RunTermination = 2,
+
+    /** RSM pause event flushed in-flight waves (Story 007 pause-flush path — Rule 13). */
+    PauseFlush     = 3,
+};
+
+// ---------------------------------------------------------------------------
+// FWaveInFlightState — per-wave admission snapshot (Story 007).
+//
+// Captured once in TryAdmitPattern() at the moment of slot pre-commitment.
+// NEVER mutated after capture — DPC publishing a new frame, or a pool-pointer
+// swap at a phase boundary, does NOT re-parametrize admitted waves (TR-WS-022,
+// AC-WS-21, AC-WS-29).
+//
+// Storage: UWaveSpawnerSubsystem::InFlightWaves (TMap<int32, FWaveInFlightState>).
+// Removed in DespawnWave() alongside LiveSlots.Remove(). Reset on Flushing→Cold.
+//
+// Plain C++ struct — not a USTRUCT. Value type used as TMap<int32, ...> mapped value;
+// no UObject lifecycle involvement. GC-safe: contains only int32 and float.
+//
+// ADR:   docs/architecture/adr-0011-wave-spawner-pattern-library.md (D3 TR-WS-022)
+// Story: production/epics/wave-spawner/story-007-rsm-dpc-integration.md
+// TRs:   TR-WS-022 (snapshot immutability post-admission)
+// ---------------------------------------------------------------------------
+struct FWaveInFlightState
+{
+    /** Wave slot identifier. Matches the key in the InFlightWaves TMap. */
+    int32 WaveId = INDEX_NONE;
+
+    /**
+     * Telegraph window in seconds captured from FDPCFrameState.TelegraphWindowS at
+     * TryAdmitPattern() time. NEVER mutated after this point (TR-WS-022).
+     * A subsequent DPC frame publishing a different TelegraphWindowS value does NOT
+     * overwrite this field (AC-WS-21). A mid-phase pool-pointer swap (Active→Holding)
+     * does NOT overwrite this field (AC-WS-29).
+     */
+    float TelegraphWindowS = 0.f;
+};

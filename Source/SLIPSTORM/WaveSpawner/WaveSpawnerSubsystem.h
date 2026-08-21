@@ -37,6 +37,11 @@
 #include "Tickable.h"
 #include "WaveSpawner/Wave.h"
 #include "WaveSpawner/WaveSpawnerTypes.h"
+#include "Seam/WaveSpawnerCallback.h"
+// Story 007: RSM enum types needed for HandleRunStateChanged / HandlePausedChanged signatures
+// and TestOnly_FireRunStateChanged seam. Lightweight headers (UENUM only; no UObject deps).
+#include "RunStateMachine/ERunState.h"
+#include "RunStateMachine/ERunOutcome.h"
 #include "WaveSpawnerSubsystem.generated.h"
 
 // Forward declarations. Full type definitions included in the .cpp.
@@ -189,8 +194,8 @@ public:
      * see in-body comment and implementation comment in WaveSpawnerSubsystem.cpp for deviation notes):
      *   Cold    → Active    (RSM COUNTDOWN→RUNNING; captures RunSeed; sets OPENER pool)
      *   Active  → Holding   (phase-boundary drain-window entry)
-     *   Active  → Flushing  (RSM terminal: DEAD|COMPLETE|ABORTED)
-     *   Holding → Flushing  (OnPausedChanged(false) with stale scheduled_slots)
+     *   Active  → Flushing  (RSM terminal: DEAD|COMPLETE|ABORTED; OR Rule 13 pause-flush — see DEVIATION NOTE in HandlePausedChanged)
+     *   Holding → Flushing  (OnPausedChanged(true) — pause fires during Holding; see DEVIATION NOTE in HandlePausedChanged)
      *   Holding → Active    (drain window clears: CountInFlightWaves()==0 + no stale slots)
      *   Holding → Idle      (long-pause path: all waves naturally despawn during Holding)
      *   Flushing → Cold     (run-termination: all live drained; NOT via Idle)
@@ -236,6 +241,42 @@ public:
      * TR-WS-023.
      */
     bool IsDrainWindowActive() const { return bDrainWindowActive; }
+
+    // =========================================================================
+    // Rule 12 despawn pipeline (Story 006 — ADR-0011 D3, TR-WS-026)
+    // =========================================================================
+
+    /**
+     * Installs the despawn callback observer. Pass nullptr to clear.
+     * Called by integration tests (SetDespawnCallback(&Stub)) and by production
+     * wiring in Story 007.
+     *
+     * @param InCallback  Observer implementing IWaveSpawnerCallback, or nullptr.
+     */
+    void SetDespawnCallback(IWaveSpawnerCallback* InCallback) { Callback = InCallback; }
+
+    /**
+     * Executes the Rule 12 ordered despawn pipeline for a single AWave actor.
+     *
+     * Pipeline sequence (mandatory regardless of Reason — TR-WS-026):
+     *   1. Callback->OnCollisionUnregistered(WaveId)
+     *   2. Callback->OnTelegraphUnregistered(WaveId)
+     *   3. LiveSlots.Remove(WaveId)       ← slot released HERE
+     *   4. Callback->OnWaveDespawned(WaveId, Reason)
+     *   5. ReleaseToPool(WaveId)          ← pool slot returned
+     *
+     * Each call releases exactly 1 LiveSlot regardless of barrage/non-barrage
+     * (see DEVIATION NOTE in WaveSpawnerSubsystem.cpp — TSet model).
+     * ScheduledSlots cleanup during PauseFlush is Story 007's responsibility (Rule 13).
+     *
+     * @param WaveId  Identifier of the AWave actor being despawned.
+     * @param Reason  Why the wave is being despawned (NaturalLanding / RunTermination / PauseFlush).
+     *
+     * Story: production/epics/wave-spawner/story-006-despawn-pipeline-and-seam-13.md
+     * ADR:   docs/architecture/adr-0011-wave-spawner-pattern-library.md (D3, Rule 12)
+     * TR:    TR-WS-026
+     */
+    void DespawnWave(int32 WaveId, EWaveDespawnReason Reason);
 
 #if WITH_DEV_AUTOMATION_TESTS
 public:
@@ -409,6 +450,132 @@ public:
      *  Story 004 / AC-WS-12a,b,c. */
     EAdmissionResult TestOnly_GetLastAdmissionResult() const { return LastAdmissionResult; }
 
+    // -------------------------------------------------------------------------
+    // Story 005 test seams — F-3 cadence governor + RNG seeding
+    // TRs: TR-WS-013, TR-WS-029, TR-WS-030
+    // -------------------------------------------------------------------------
+
+    /** Test-only: set BarrageCountThisPeak directly. Story 005 / AC-WS-14. */
+    void TestOnly_SetBarrageCount(int32 N) { BarrageCountThisPeak = N; }
+    /** Test-only: read BarrageCountThisPeak. Story 005 / AC-WS-15. */
+    int32 TestOnly_GetBarrageCount() const { return BarrageCountThisPeak; }
+    /** Test-only: set PeakEntryTimeS directly. Story 005 / AC-WS-14. */
+    void TestOnly_SetPeakEntryTimeS(float T) { PeakEntryTimeS = T; }
+    /** Test-only: set ActivePhase directly for F-3 branch tests without lifecycle churn. Story 005. */
+    void TestOnly_SetActivePhase(ERunPhase Phase) { ActivePhase = Phase; }
+    /** Test-only: seed PatternRNG with a known value for deterministic draw tests. Story 005 / AC-WS-13. */
+    void TestOnly_SeedPatternRNG(int32 Seed) { PatternRNG.Initialize(Seed); }
+
+    /**
+     * Test-only: inject NonBarragePatterns into OpenerPool and point ActiveDrawPool at it.
+     * Setting ActiveDrawPool is required for DrawNonBarragePattern to select from the injected pool.
+     * Story 005 / AC-WS-15.
+     */
+    void TestOnly_InjectOpenerPool(const TArray<FPatternDefinition>& Patterns)
+    {
+        OpenerPool.NonBarragePatterns = Patterns;
+        ActiveDrawPool = &OpenerPool;
+    }
+
+    /** Test-only: inject BarragePatterns into PeakPool for DrawBarragePattern tests. Story 005 / AC-WS-15. */
+    void TestOnly_InjectPeakBarragePool(const TArray<FPatternDefinition>& Patterns)
+    {
+        PeakPool.BarragePatterns = Patterns;
+    }
+
+    /**
+     * Test-only: exposes the private ShouldDrawBarrage() predicate directly.
+     * Allows TC4–TC8 to verify F-3 three-branch behavior without routing through the
+     * full DPC admission pipeline. Direct access prevents ShouldDrawBarrage from consuming
+     * a PatternRNG FRand() value unintentionally in TC2/TC9 draw tests. Story 005 / AC-WS-14.
+     */
+    bool TestOnly_ShouldDrawBarrage() const { return ShouldDrawBarrage(); }
+
+    /**
+     * Test-only: directly calls DrawNonBarragePattern() for pool selection tests.
+     * Bypasses TryAdmitPattern — no ShouldDrawBarrage call, no slot accounting.
+     * Story 005 / AC-WS-15.
+     */
+    void TestOnly_DrawNonBarragePattern(const FDPCFrameState& F) { DrawNonBarragePattern(F); }
+
+    /**
+     * Test-only: directly calls DrawBarragePattern() for counter and pool tests.
+     * Bypasses TryAdmitPattern — no ShouldDrawBarrage call, no slot accounting.
+     * Story 005 / AC-WS-15.
+     */
+    void TestOnly_DrawBarragePattern(const FDPCFrameState& F) { DrawBarragePattern(F); }
+
+    /**
+     * Test-only: returns the pool index selected by the most recent Draw*Pattern() call.
+     * Returns INDEX_NONE until a draw fires or after Cold reset (LastDrawIndexForTest = INDEX_NONE).
+     * Used for determinism verification in TC2 and TC9 (AC-WS-15).
+     */
+    int32 TestOnly_GetLastDrawIndex() const { return LastDrawIndexForTest; }
+
+    /**
+     * Test-only: returns the next FRand() value from a COPY of PatternRNG without advancing
+     * the real stream. Allows TC1 to verify PatternRNG stream state directly after
+     * Cold→Active seeding (AC-WS-13), and TC7-boundary to verify strict `<` semantics
+     * by setting WBarrage to the peeked value (AC-WS-14).
+     * Story 005 / AC-WS-13, AC-WS-14.
+     */
+    float TestOnly_PeekNextPatternRNGFRand() const
+    {
+        FRandomStream Peek = PatternRNG;  // copy — does not advance the real stream
+        return Peek.FRand();
+    }
+
+    // -------------------------------------------------------------------------
+    // Story 007 test seams — RSM/DPC integration
+    // TRs: TR-WS-022 (snapshot immutability), TR-WS-027 (LastSpawnTime preserve)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Test-only: returns the TelegraphWindowS captured in InFlightWaves for the given WaveId.
+     * Returns -1.f if WaveId is not present (not in-flight or already despawned).
+     * Used by AC-WS-21 and AC-WS-29 to verify snapshot immutability after a DPC frame
+     * update or phase-boundary pool swap.
+     * Story 007.
+     */
+    float TestOnly_GetInFlightTelegraphWindow(int32 WaveId) const
+    {
+        const FWaveInFlightState* State = InFlightWaves.Find(WaveId);
+        return State ? State->TelegraphWindowS : -1.f;
+    }
+
+    /**
+     * Test-only: directly sets LastSpawnTimeS.
+     * Enables AC-WS-17 TR-WS-027 assertion: set a known value before pause-flush,
+     * then verify the same value is present after HandlePausedChanged(true) completes.
+     * Story 007 / AC-WS-17, TR-WS-027.
+     */
+    void TestOnly_SetLastSpawnTimeS(float T) { LastSpawnTimeS = T; }
+
+    /**
+     * Test-only: directly invokes HandlePausedChanged(bIsPaused, Timestamp).
+     * Bypasses the RSM delegate — fires pause/resume events headlessly without a live RSM.
+     * Caller must TestOnly_SetLifecycleState(Active) first; handlers guard on lifecycle state.
+     * Story 007 / AC-WS-17, AC-WS-28.
+     */
+    void TestOnly_FirePausedChanged(bool bIsPaused, double Timestamp = 0.0)
+    {
+        HandlePausedChanged(bIsPaused, Timestamp);
+    }
+
+    /**
+     * Test-only: directly invokes HandleRunStateChanged with the given state transition.
+     * Bypasses the RSM delegate — fires run state transitions headlessly without a live RSM.
+     * Caller must TestOnly_SetLifecycleState(Active|Cold) first; handlers guard on lifecycle.
+     * Story 007 / AC-WS-18.
+     */
+    void TestOnly_FireRunStateChanged(
+        ERunState PreviousState, ERunState NewState,
+        ERunOutcome Outcome   = ERunOutcome::NONE,
+        double      Timestamp = 0.0)
+    {
+        HandleRunStateChanged(PreviousState, NewState, Outcome, Timestamp);
+    }
+
 #endif // WITH_DEV_AUTOMATION_TESTS
 
 private:
@@ -505,6 +672,46 @@ private:
     FDelegateHandle DPCFrameReadyHandle;
 
     // =========================================================================
+    // Story 007: RSM delegate subscriptions + RunSeed capture
+    // TRs: TR-WS-013 (seed), TR-WS-025 (run termination), TR-WS-027 (pause)
+    // =========================================================================
+
+    /**
+     * Cached RSM pointer. Populated in Initialize() after InitializeDependency(RSM).
+     * Used in HandlePausedChanged and HandleRunStateChanged.
+     * Null-checked in Deinitialize() and in test paths where Initialize() is not called.
+     * Not UPROPERTY — raw C++ pointer; RSM is a UGameInstanceSubsystem that outlives this.
+     */
+    URunStateMachineSubsystem* RSMSubsystem = nullptr;
+
+    /** Handle for URunStateMachineSubsystem::OnPausedChanged subscription (Story 007). */
+    FDelegateHandle RSMPausedHandle;
+
+    /** Handle for URunStateMachineSubsystem::OnStateChanged subscription (Story 007). */
+    FDelegateHandle RSMStateHandle;
+
+    /**
+     * RunSeed captured from RSM at Cold→Active (COUNTDOWN→RUNNING RSM transition).
+     * Seeds PatternRNG lower 32 bits in OnLifecycleTransition(Active) (TR-WS-013).
+     * MUST be set by HandleRunStateChanged BEFORE calling TransitionTo(Active) to avoid
+     * double-initialization: OnLifecycleTransition reads this field when seeding PatternRNG.
+     * Stub 0 until RSM epic delivers the real seed via GetRunSeed() (TR-WS-013).
+     * Story 007 / AC-WS-13.
+     */
+    uint64 RunSeed = 0;
+
+    // =========================================================================
+    // Despawn pipeline callback (Story 006 — Seam 13)
+    // =========================================================================
+
+    /**
+     * Active despawn callback observer. Nullptr until wired by tests or production (Story 007).
+     * Not UPROPERTY — plain C++ pointer; IWaveSpawnerCallback is not a UObject.
+     * Lifetime: caller is responsible for ensuring the callback outlives this subsystem.
+     */
+    IWaveSpawnerCallback* Callback = nullptr;
+
+    // =========================================================================
     // Lifecycle helpers (Story 002 — ADR-0011 D3)
     // =========================================================================
 
@@ -547,6 +754,87 @@ private:
      * Story 003.
      */
     float GetCurrentTimeS() const;
+
+    // =========================================================================
+    // Story 007: RSM event handlers, resume grace, in-flight ordering
+    // ADR:   docs/architecture/adr-0011-wave-spawner-pattern-library.md (D3 Rules 13, 14)
+    // ADR:   docs/architecture/adr-0007-run-state-machine-hosting.md (OnPausedChanged, OnStateChanged)
+    // TRs:   TR-WS-025, TR-WS-027, TR-WS-028
+    // =========================================================================
+
+    /**
+     * Bound to URunStateMachineSubsystem::OnPausedChanged (two-param delegate per ADR-0007).
+     *
+     * bIsPaused == true  (Rule 13 pause-flush):
+     *   Drains all LiveSlots in WaveId ASC order with EWaveDespawnReason::PauseFlush.
+     *   LastSpawnTimeS is NOT reset (TR-WS-027 / AC-WS-17).
+     *   Transitions lifecycle Active|Holding → Flushing.
+     *
+     * bIsPaused == false (resume):
+     *   Sets resume grace window (kResumeGraceS / TR-WS-012 / AC-WS-28).
+     *   Transitions lifecycle Flushing|Holding|Idle → Active.
+     *
+     * Guarded: spurious broadcasts in Cold/Idle/Flushing states are logged + ignored.
+     * Story 007 / AC-WS-17, AC-WS-28.
+     */
+    void HandlePausedChanged(bool bIsPaused, double Timestamp);
+
+    /**
+     * Bound to URunStateMachineSubsystem::OnStateChanged (four-param delegate per ADR-0007).
+     *
+     * NewState == RUNNING (Cold→Active):
+     *   Captures RunSeed from RSM (BEFORE TransitionTo to avoid RNG double-init, Story 007).
+     *   Transitions lifecycle Cold → Active, which seeds PatternRNG (TR-WS-013).
+     *
+     * NewState ∈ {DEAD, COMPLETE, ABORTED} (Rule 14 run-termination):
+     *   Drains all LiveSlots in WaveId ASC order with EWaveDespawnReason::RunTermination.
+     *   Clears bBarrageOwed. Transitions Active|Holding → Flushing → Cold.
+     *
+     * DEVIATION NOTE (AC-WS-18): Story AC-WS-18 says lifecycle → Idle. ADR-0011 D3
+     * is authoritative (coordinator-approved, same precedent as IsValidTransition DEVIATION NOTE):
+     * Flushing→Idle is FORBIDDEN; run-termination resets to Cold. OnLifecycleTransition(Cold)
+     * satisfies AC-WS-18's substantive checks (bBarrageOwed=false, Live=0, Scheduled=0).
+     * AC-WS-18 text should be reconciled to read "lifecycle → Cold".
+     *
+     * Story 007 / AC-WS-18.
+     */
+    void HandleRunStateChanged(
+        ERunState PreviousState, ERunState NewState,
+        ERunOutcome Outcome, double Timestamp);
+
+    /**
+     * Sets bInResumeGrace = true and ResumeGraceEndTimeS = now + kResumeGraceS.
+     * Rule 1 gate in OnDPCFrameReady vetoes admission until the window expires lazily.
+     * Called by HandlePausedChanged when OnPausedChanged(false) fires (AC-WS-28).
+     * TR-WS-012.
+     */
+    void OnResumeFromPause();
+
+    /**
+     * Returns WaveIds currently in LiveSlots, sorted in ascending numeric order.
+     * Used by HandlePausedChanged and HandleRunStateChanged for deterministic flush order.
+     * Rule 13/14: despawn order is WaveId ASC (AC-WS-17, AC-WS-18).
+     * TSet::Array() + Sort() — O(N log N), N ≤ 16, negligible cost (ADR-0011 D2 cap).
+     */
+    TArray<int32> GetInFlightWaveIdsSorted() const;
+
+    /**
+     * Removes InFlightWaves entries for all WaveIds currently in ScheduledSlots.
+     * Called before ScheduledSlots.Reset() on both the pause-flush (Rule 13) and
+     * run-termination (Rule 14) paths.
+     *
+     * Background: TryAdmitPattern() adds an FWaveInFlightState entry to InFlightWaves for
+     * every wave at slot pre-commitment time — before the wave is live. ScheduledSlots holds
+     * those pre-committed IDs. If ScheduledSlots.Reset() fires without first removing the
+     * corresponding InFlightWaves entries, those entries become orphans: InFlightWaves.Num()
+     * inflates by up to 3 per barrage pause event and only clears at Flushing→Cold (run end).
+     *
+     * DespawnWave() is NOT called here — no pool actor is associated with scheduled waves.
+     * N ≤ 16 per ADR-0011 D2 concurrency cap — negligible cost on infrequent event path.
+     * B-1 fix (code-review 2026-08-21).
+     * Story 007 / TR-WS-025.
+     */
+    void PurgeScheduledInFlightEntries();
 
     // =========================================================================
     // Phase / draw-pool state (Story 002 — ADR-0011 D3)
@@ -635,6 +923,26 @@ private:
     UPROPERTY(Transient) TSet<int32> LiveSlots;
 
     /**
+     * Per-wave admission snapshots. Keyed by WaveId; value captures the DPC frame
+     * parameters that were current when TryAdmitPattern() pre-committed the slot.
+     *
+     * Lifecycle:
+     *   Add: TryAdmitPattern() at each ScheduledSlots.Add() site (3 sites, Story 007).
+     *   Remove: DespawnWave() alongside LiveSlots.Remove() (Rule 12 pipeline, Story 007).
+     *   Reset: OnLifecycleTransition(Cold) resets for the next run.
+     *
+     * Immutability contract (TR-WS-022, AC-WS-21, AC-WS-29):
+     *   Once added, FWaveInFlightState fields are NEVER mutated. A subsequent DPC frame
+     *   publishing a new TelegraphWindowS does not overwrite the stored value. A pool-pointer
+     *   swap at a phase boundary (Active→Holding) does not touch this map.
+     *
+     * Not UPROPERTY — plain TMap<int32, struct>. GC-safe: key/value contain no UObject refs.
+     * Game-thread-only (ADR-0005 threading model).
+     * Story 007 / TR-WS-022.
+     */
+    TMap<int32, FWaveInFlightState> InFlightWaves;
+
+    /**
      * True when a barrage draw was dropped due to insufficient slots.
      * The next admission window with available >= 3 is reserved for a fresh barrage draw.
      * Set in TryAdmitPattern() when barrage cannot be fulfilled atomically.
@@ -672,7 +980,8 @@ private:
      * kMaxConcurrentWavesStub (= 23, defined in WaveSpawnerSubsystem.cpp) is the structural
      * pool-size ceiling and a conservative placeholder. The real DPC-published concurrency cap
      * (MAX_CONCURRENT_WAVES_CAP = 16, TR-DPC-011) will replace it when FDPCFrameState
-     * exposes max_concurrent_waves. Story 005 removes this constant and reads from FrameState.
+     * exposes max_concurrent_waves. TODO: replace with FDPCFrameState.max_concurrent_waves
+     * when the DPC epic delivers that field (TR-DPC-011).
      *
      * Story 004 / ADR-0011 D2 Stage 2. TRs: TR-WS-017, TR-WS-018.
      */
@@ -682,8 +991,9 @@ private:
      * Implements ADR-0011 D2 Stage 2 — Rule 7 slot pre-commitment (TR-WS-017, TR-WS-018).
      * Called from OnDPCFrameReady() after all Rule 1 gates and cadence gate pass.
      *
-     * Stage 3 (ShouldDrawBarrage) is a Story 005 stub (always false here).
-     * Stage 4 (pattern draw + AcquireFromPool) is a Story 005 stub (NextWaveIdCounter used).
+     * Stage 3 (ShouldDrawBarrage): F-3 cadence governor — implemented Story 005 / AC-WS-14.
+     * Stage 4 (pattern draw): DrawBarragePattern / DrawNonBarragePattern — implemented Story 005 / AC-WS-15.
+     *   AcquireFromPool integration and real WaveIds are deferred to Story 006 (NextWaveIdCounter stub used).
      *
      * Returns EAdmissionResult:
      *   Admitted              — slot(s) pre-committed; ScheduledSlots updated.
@@ -697,11 +1007,131 @@ private:
      */
     EAdmissionResult TryAdmitPattern(const FDPCFrameState& FrameState);
 
+    // =========================================================================
+    // Stage 3–4: F-3 cadence governor + pattern draw (Story 005)
+    // TRs: TR-WS-013, TR-WS-029, TR-WS-030, TR-WS-033, TR-WS-034
+    // GDD: design/gdd/wave-spawner-pattern-library.md Rules 8, F-3
+    // =========================================================================
+
+    /**
+     * Stage 3: F-3 cadence governor. Returns true if the next draw should be a barrage.
+     * Only returns true during PEAK phase. Three-branch piecewise weight function:
+     *   1. Force-draw  (TR-WS-030): BarrageCountThisPeak == 0 AND t_norm_PEAK >= kTForce → true
+     *   2. Ceiling     (implicit):  BarrageCountThisPeak >= kTargetBarrages → false
+     *   3. Proportional (TR-WS-029): w = kBaseW * (kTargetBarrages - count) * t_norm_PEAK
+     *      (clamped [0, kWCeiling]); admits if PatternRNG.FRand() < w.
+     *
+     * Uses only FMath::Clamp + linear multiplication — no pow/exp/log/sqrt (TR-WS-034, AC-WS-14).
+     * Declared const; PatternRNG is mutable to allow FRand() from a const method.
+     * Uses GetCurrentTimeS() (test-injectable seam) — NOT GetWorld() directly (null-safe in tests).
+     *
+     * Story 005 / AC-WS-14.
+     */
+    bool ShouldDrawBarrage() const;
+
+    /**
+     * Stage 4: Draw one pattern from the non-barrage sub-pool of the active phase pool.
+     * Uniform random selection via PatternRNG.RandRange(0, Pool.Num()-1).
+     * Empty-pool guard: logs warning and returns without crashing (AC-WS-15).
+     * FrameState held for Story 006 AdmitPattern() integration (stub uses TODO comment).
+     * Story 005 / AC-WS-15.
+     */
+    void DrawNonBarragePattern(const FDPCFrameState& FrameState);
+
+    /**
+     * Stage 4: Draw one pattern from PeakPool.BarragePatterns.
+     * Uniform random selection via PatternRNG.RandRange(0, Pool.Num()-1).
+     * Increments BarrageCountThisPeak by 1 on each successful draw.
+     * Empty-pool guard: logs warning and returns without crashing (AC-WS-15).
+     * FrameState held for Story 006 AdmitPattern() integration (stub uses TODO comment).
+     * Story 005 / AC-WS-15.
+     */
+    void DrawBarragePattern(const FDPCFrameState& FrameState);
+
+    // =========================================================================
+    // Story 005: F-3 governor fields + RNG
+    // =========================================================================
+
+    /**
+     * Deterministic RNG for pattern draw selection (Stage 4).
+     * Seeded once at Cold→Active from RunSeed lower 32 bits (Story 007 supplies real value;
+     * stub seeds with 0 until RSM integration — TR-WS-013, AC-WS-13).
+     * Wall-clock-derived seeds (FDateTime::Now(), FMath::Rand()) are FORBIDDEN (AC-WS-13).
+     * Declared mutable: FRandomStream::FRand() advances internal Seed, which is mutable in
+     * UE 5.x. mutable allows calling FRand() from const ShouldDrawBarrage().
+     * Verify FRandomStream::Seed mutable in UE 5.7 docs if compile errors arise here.
+     */
+    mutable FRandomStream PatternRNG;
+
+    /**
+     * Count of barrage patterns drawn in the current PEAK phase.
+     * Incremented by DrawBarragePattern(); reset to 0 at Cold→Active entry (Flushing→Cold resets too).
+     * Drives F-3 cadence governor three-branch logic in ShouldDrawBarrage().
+     * Story 005 / AC-WS-14, AC-WS-15.
+     */
+    int32 BarrageCountThisPeak = 0;
+
+    /**
+     * Game time (seconds) when the current PEAK phase began.
+     * Used by ShouldDrawBarrage() to compute t_norm_PEAK = (Now - PeakEntryTimeS) / kPeakDurationS.
+     * Set by Story 007 RSM integration when PEAK phase starts.
+     * DEVIATION NOTE: stub = 0.f until Story 007 RSM integration; forces t_norm to measure
+     * from run start rather than PEAK entry, underestimating the PEAK fraction.
+     * Story 005 / AC-WS-14.
+     */
+    float PeakEntryTimeS = 0.f;
+
+    // =========================================================================
+    // Story 005: F-3 tuning constants — stub values, will be config-loaded in Story 007.
+    //
+    // DEVIATION NOTE (each constant): stub value — Story 007 replaces with config-loaded value
+    // from UWaveSpawnerConfig data asset. Do NOT hardcode in gameplay logic; always reference
+    // through these named constants so Story 007 can replace them with a single-line config read.
+    // =========================================================================
+
+    /** Base barrage weight fraction. Must satisfy kBaseW < kWCeiling (ADR-0011 D4).
+     *  DEVIATION NOTE: stub — Story 007 loads from UWaveSpawnerConfig. */
+    static constexpr float kBaseW          = 0.25f;
+
+    /** Max weight cap for proportional branch clamping.
+     *  DEVIATION NOTE: stub — Story 007 loads from UWaveSpawnerConfig. */
+    static constexpr float kWCeiling       = 1.0f;
+
+    /** t_norm_PEAK threshold at which force-draw activates (0 barrages drawn and elapsed fraction).
+     *  DEVIATION NOTE: stub — Story 007 loads from UWaveSpawnerConfig. */
+    static constexpr float kTForce         = 0.75f;
+
+    /** Target average barrage events per PEAK phase (BARRAGE_EVENTS_PER_PEAK_TARGET_AVG).
+     *  DEVIATION NOTE: stub — Story 007 loads from UWaveSpawnerConfig. */
+    static constexpr int32 kTargetBarrages = 2;
+
+    /** Approximate PEAK phase duration in seconds (60s run × ~35%).
+     *  DEVIATION NOTE: stub — Story 007 loads from UWaveSpawnerConfig (or derives from RSM). */
+    static constexpr float kPeakDurationS  = 21.0f;
+
+    /**
+     * Post-resume grace window duration in seconds (Rule 1 gate / TR-WS-012).
+     * No admissions fire within this window after OnPausedChanged(false) fires.
+     * Named constant here so config integration replaces a single declaration line.
+     * DEVIATION NOTE: stub — Story 007 loads from UWaveSpawnerConfig. AC-WS-28.
+     * TODO(RSM epic): Replace bInResumeGrace + kResumeGraceS with RSMSubsystem->IsResumeGrace()
+     * once the RSM epic implements the shared grace window (ADR-0007). IsResumeGrace() is the
+     * authoritative signal shared by Wave Spawner, Collision, and Player Movement (TR-RSM-008/030/031).
+     * If kResumeGraceS diverges from RSM's actual duration before that refactor, veto windows desync.
+     */
+    static constexpr float kResumeGraceS   = 1.5f;
+
 #if WITH_DEV_AUTOMATION_TESTS
     // Backing fields for the GetCurrentTimeS() test seam.
     // TestOnly_SetCurrentTimeOverride() activates the override; production builds
     // omit these fields entirely to keep the struct lean.
     float TestCurrentTimeOverrideS = 0.f;
     bool  bTestTimeOverrideActive  = false;
+
+    // Backing field for TestOnly_GetLastDrawIndex().
+    // Set by DrawNonBarragePattern() and DrawBarragePattern() after a successful RandRange call.
+    // INDEX_NONE until first draw fires in this session; reset to INDEX_NONE in Cold case.
+    // Story 005 / AC-WS-15.
+    int32 LastDrawIndexForTest = INDEX_NONE;
 #endif
 };

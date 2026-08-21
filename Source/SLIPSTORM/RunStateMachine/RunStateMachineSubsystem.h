@@ -73,6 +73,14 @@ public:
      *  TODO(RSM epic): stub — replace with ADR-0007 implementation. */
     bool IsResumeGrace() const;
 
+    /**
+     * Returns the 64-bit deterministic seed generated at COUNTDOWN→RUNNING.
+     * WaveSpawnerSubsystem captures this at Cold→Active to seed PatternRNG (TR-WS-013).
+     * Stub returns 0 until RSM epic delivers the real seed from the ADR-0007 run sequence.
+     * TODO(RSM epic): stub — replace with ADR-0007 implementation.
+     */
+    uint64 GetRunSeed() const;
+
 #if WITH_DEV_AUTOMATION_TESTS
     /** Test-only: increments once per ForceTickNow invocation. Story 003 JC-1. */
     mutable int32 TestOnly_ForceTickNowCallCount = 0;
