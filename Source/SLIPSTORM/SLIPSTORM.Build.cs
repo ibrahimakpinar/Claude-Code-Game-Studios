@@ -8,6 +8,7 @@ public class SLIPSTORM : ModuleRules
     public SLIPSTORM(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+        CppStandard = CppStandardVersion.Cpp20;   // Story 006: enables requires-expression in WaveSpawnerCallbackTestStub.h
 
         PublicDependencyModuleNames.AddRange(new string[]
         {

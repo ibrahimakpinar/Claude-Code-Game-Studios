@@ -1,12 +1,13 @@
 # Story 006: Despawn Pipeline + IWaveSpawnerCallback + Seam 13
 
 > **Epic**: Wave Spawner Pattern Library
-> **Status**: Ready
+> **Status**: Complete
 > **Layer**: Feature
 > **Type**: Integration
-> **Estimate**: (fill before sprint planning)
+> **Estimate**: S–M (~2–3h)
 > **Manifest Version**: (none — docs/architecture/control-manifest.md not found; run /create-control-manifest)
-> **Last Updated**: 2026-08-19
+> **Last Updated**: 2026-08-20
+> **Completed**: 2026-08-20
 
 ## Context
 
@@ -32,6 +33,13 @@
 - [ ] **AC-WS-16 (BLOCKING)**: Rule 12 despawn pipeline fires in exact order: `OnCollisionUnregistered(WaveId)` → `OnTelegraphUnregistered(WaveId)` → `OnWaveDespawned(WaveId, Reason)`. This ordering holds for all three `EWaveDespawnReason` values: `NaturalLanding`, `RunTermination`, `PauseFlush`. Verified via `FWaveSpawnerCallbackTestStub.EventLog()` which records insertion order.
 
 - [ ] **AC-WS-19 (BLOCKING)**: Seam 13 contract. `FWaveSpawnerCallbackTestStub.SetOnDespawnedUserCallback(TFunction)` fires AFTER `OnWaveDespawned` is recorded in the event log (re-entrant: the callback runs within the `OnWaveDespawned` call, after the standard recording step). Production `IWaveSpawnerCallback` does NOT have a `SetOnDespawnedUserCallback` method — `static_assert` or compile-time check prevents accidental exposure. Test stub is only available in non-Shipping builds (`#if !UE_BUILD_SHIPPING`).
+
+- [ ] **AC-WS-20 (BLOCKING)**: `DespawnWave()` releases exactly the correct
+  number of `Live` slots (1 for non-barrage; 3 for barrage) **between**
+  `OnTelegraphUnregistered` and `OnWaveDespawned`. Verified by inspecting
+  `TestOnly_GetLiveCount()` from inside the `SetOnDespawnedUserCallback`
+  re-entrant hook: at callback time, the slot has already been released and
+  `Live` reflects the post-release value.
 
 ---
 
@@ -125,12 +133,22 @@ private:
     TFunction<void(int32, EWaveDespawnReason)> OnDespawnedUserCallback;
 };
 
-// Static compile-time verification: production interface does NOT have the re-entrant slot
-static_assert(!std::is_member_function_pointer_v<
-    decltype(&IWaveSpawnerCallback::SetOnDespawnedUserCallback)>,
-    "Production interface must NOT expose SetOnDespawnedUserCallback");
-// Note: the static_assert above will produce a compile error if the production
-// interface ever accidentally gains SetOnDespawnedUserCallback.
+// Compile-time guard: production IWaveSpawnerCallback must NOT expose
+// SetOnDespawnedUserCallback. Using C++20 requires-expression (UE 5.7
+// ships with C++20 enabled on all target platforms).
+//
+// If someone accidentally adds SetOnDespawnedUserCallback to the production
+// interface, this static_assert will fire with a clear diagnostic.
+// The `requires` form is correct here — unlike `decltype(&T::method)`,
+// it evaluates to false (not a hard compile error) when the method is absent.
+static_assert(
+    !requires(IWaveSpawnerCallback& c) {
+        c.SetOnDespawnedUserCallback(
+            std::declval<TFunction<void(int32, EWaveDespawnReason)>>());
+    },
+    "IWaveSpawnerCallback must NOT expose SetOnDespawnedUserCallback "
+    "(Seam 13 contract: re-entrant slot is test-infrastructure only)."
+);
 
 #endif  // !UE_BUILD_SHIPPING
 ```
@@ -138,6 +156,14 @@ static_assert(!std::is_member_function_pointer_v<
 **File placement:**
 - `Source/SLIPSTORM/Seam/` (already created, per git status): `WaveSpawnerCallback.h` (production interface + enum), `WaveSpawnerCallbackTestStub.h` (test seam, `#if !UE_BUILD_SHIPPING`)
 - `Source/SLIPSTORM/WaveSpawner/WaveSpawnerSubsystem.h/cpp`: `DespawnWave()` implementation
+
+**Performance:**
+`DespawnWave()` fires at most ~16× per run-second (bounded by `max_concurrent_waves`
+cap). Each invocation is 3 virtual dispatches + 1 `TArray<FDespawnEvent>.Add()` (test
+builds only) + 1 optional `TFunction` call (test builds only). No heap allocation on
+the critical path in Shipping builds — production `IWaveSpawnerCallback` has no
+`TArray` or `TFunction` members. No dedicated frame-budget allocation required; fits
+comfortably inside the 16.6 ms mobile envelope.
 
 ---
 
@@ -161,7 +187,7 @@ static_assert(!std::is_member_function_pointer_v<
 **Story Type**: Integration
 **Required evidence**: `Source/SLIPSTORM/Tests/Integration/WaveSpawner/WaveSpawnerDespawnPipelineTest.cpp` — must exist and pass
 
-**Status**: [ ] Not yet created
+**Status**: [x] Created — `Source/SLIPSTORM/Tests/Integration/WaveSpawner/WaveSpawnerDespawnPipelineTest.cpp` (5 test commands: TC1-TC3 AC-WS-16, TC4 AC-WS-19, TC5 AC-WS-20)
 
 ---
 
@@ -169,3 +195,12 @@ static_assert(!std::is_member_function_pointer_v<
 
 - Depends on: Story 001 (pool release), Story 002 (lifecycle state informs which despawn reason applies), Story 004 (Live counter released during despawn)
 - Unlocks: Story 007 (pause flush and run termination call `DespawnWave()` with `PauseFlush` / `RunTermination` reason), Story 009 (telemetry emitted during despawn pipeline)
+
+## Completion Notes
+**Completed**: 2026-08-20
+**Criteria**: 3/3 passing (AC-WS-16, AC-WS-19, AC-WS-20 — all BLOCKING, all verified)
+**Deviations**:
+- ADVISORY: `GetSlotsForWave()` N/A in TSet model — `LiveSlots.Remove(WaveId)` releases 1 slot per call; 3-wave barrage = 3 separate DespawnWave calls. Net effect identical. Documented in DEVIATION NOTE in WaveSpawnerSubsystem.cpp.
+- ADVISORY: `ReleaseToPool()` logs expected Warning in headless tests (pool not populated; no SpawnActor). Benign. Documented in test file header.
+**Test Evidence**: Integration test at `Source/SLIPSTORM/Tests/Integration/WaveSpawner/WaveSpawnerDespawnPipelineTest.cpp` (5 commands)
+**Code Review**: Complete — /code-review passed before close
